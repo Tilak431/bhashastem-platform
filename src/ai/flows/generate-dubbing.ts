@@ -76,16 +76,33 @@ import { getGoogleCredentials } from '@/lib/google-auth';
 const credentials = getGoogleCredentials();
 const ttsClient = new TextToSpeechClient(credentials ? { credentials } : {});
 
-// Helper to map language names to Google Cloud TTS language codes
-const getLanguageCode = (language: string) => {
-  const langMap: Record<string, string> = {
-    'Hindi': 'hi-IN',
-    'Tamil': 'ta-IN',
-    'Bengali': 'bn-IN',
-    'Kannada': 'kn-IN',
-    'English': 'en-IN', // Use Indian English accent for consistency
-  };
-  return langMap[language] || 'en-US';
+// Helper to map language names to specific Google Cloud TTS voice names
+// Using Neural2 and Wavenet for higher quality and better accents
+const getVoiceConfig = (language: string) => {
+  const normalize = (s: string) => s.toLowerCase().trim();
+  const lang = normalize(language);
+
+  if (lang.includes('hindi') || lang === 'hi') {
+    return { languageCode: 'hi-IN', name: 'hi-IN-Neural2-A' }; // Female, high quality
+  }
+  if (lang.includes('tamil') || lang === 'ta') {
+    return { languageCode: 'ta-IN', name: 'ta-IN-Wavenet-B' }; // Female
+  }
+  if (lang.includes('bengali') || lang === 'bn') {
+    return { languageCode: 'bn-IN', name: 'bn-IN-Wavenet-A' }; // Female
+  }
+  if (lang.includes('kannada') || lang === 'kn') {
+    return { languageCode: 'kn-IN', name: 'kn-IN-Wavenet-A' }; // Female
+  }
+  if (lang.includes('telugu') || lang === 'te') {
+    return { languageCode: 'te-IN', name: 'te-IN-Standard-A' }; // Female
+  }
+  if (lang.includes('english') || lang === 'en') {
+    return { languageCode: 'en-IN', name: 'en-IN-Neural2-A' }; // Indian English
+  }
+
+  // Default to US English
+  return { languageCode: 'en-US', name: 'en-US-Neural2-F' };
 };
 
 
@@ -104,12 +121,16 @@ const generateDubbingFlow = ai.defineFlow(
     const translatedText = translationOutput.translatedText;
 
     // Step 2: Text-to-Speech (Standard Google Cloud TTS)
-    const languageCode = getLanguageCode(targetLanguage);
+    const voiceConfig = getVoiceConfig(targetLanguage);
+    console.log(`Generating Audio for ${targetLanguage} using voice: ${voiceConfig.name}`); // Debug log
 
     const request = {
       input: { text: translatedText },
-      // Select the language and SSML voice gender (optional)
-      voice: { languageCode: languageCode, ssmlGender: 'NEUTRAL' as const },
+      // Select the language and specific voice name for better accent
+      voice: {
+        languageCode: voiceConfig.languageCode,
+        name: voiceConfig.name
+      },
       // select the type of audio encoding
       audioConfig: { audioEncoding: 'LINEAR16' as const },
     };
