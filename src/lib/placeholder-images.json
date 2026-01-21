@@ -1,0 +1,52 @@
+{
+  "placeholderImages": [
+    {
+      "id": "physics_1",
+      "description": "An illustration of atomic structures.",
+      "imageUrl": "https://images.unsplash.com/photo-1682391427624-61a45b5c7797?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxwaHlzaWNzJTIwYXRvbXxlbnwwfHx8fDE3NjgzMDM4NTd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "physics atom"
+    },
+    {
+      "id": "chemistry_1",
+      "description": "A set of beakers with colorful liquids.",
+      "imageUrl": "https://images.unsplash.com/photo-1694230155228-cdde50083573?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxjaGVtaXN0cnklMjBsYWJ8ZW58MHx8fHwxNzY4MzgzNzc3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "chemistry lab"
+    },
+    {
+      "id": "biology_1",
+      "description": "A microscopic view of a plant cell.",
+      "imageUrl": "https://images.unsplash.com/photo-1631556094937-96f4f696c91f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxiaW9sb2d5JTIwY2VsbHxlbnwwfHx8fDE3Njg0MDQwNDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "biology cell"
+    },
+    {
+      "id": "math_1",
+      "description": "Abstract geometric shapes and patterns.",
+      "imageUrl": "https://images.unsplash.com/photo-1746468659043-9eeda39bb2ea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtYXRoJTIwZ2VvbWV0cnl8ZW58MHx8fHwxNzY4NDA0MDQ1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "math geometry"
+    },
+    {
+      "id": "physics_2",
+      "description": "Visualization of gravitational waves.",
+      "imageUrl": "https://images.unsplash.com/photo-1737819505350-9f1b39c05c70?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxwaHlzaWNzJTIwc3BhY2V8ZW58MHx8fHwxNzY4NDA0MDQ1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "physics space"
+    },
+    {
+      "id": "chemistry_2",
+      "description": "A diagram of a complex molecule.",
+      "imageUrl": "https://images.unsplash.com/photo-1707135719639-409915fbc68f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjaGVtaXN0cnklMjBtb2xlY3VsZXxlbnwwfHx8fDE3Njg0MDQwNDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "chemistry molecule"
+    },
+    {
+      "id": "biology_2",
+      "description": "A rendering of a DNA double helix.",
+      "imageUrl": "https://images.unsplash.com/photo-1575468130766-fce03f7afaab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxiaW9sb2d5JTIwZG5hfGVufDB8fHx8MTc2ODQwNDA0NXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "biology dna"
+    },
+    {
+      "id": "math_2",
+      "description": "A chalkboard covered in complex equations.",
+      "imageUrl": "https://images.unsplash.com/photo-1754304342453-927ae7740b99?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxtYXRoJTIwZXF1YXRpb258ZW58MHx8fHwxNzY4MzA1ODg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "math equation"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Allow read/write access to all authenticated users for now
+    // This is NOT secure for production, but allows development to proceed.
+    // We will tighten these rules later.
+    match /{document=**} {
+      // Re-applying rules to resolve permission issues.
+      allow read, write: if isSignedIn();
+    }
+  }
+}

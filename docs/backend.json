@@ -1,0 +1,692 @@
+
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the BhashaSTEM application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "userType": {
+          "type": "string",
+          "description": "Type of user (e.g., 'student', 'teacher')."
+        },
+        "name": {
+          "type": "string",
+          "description": "User's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "totalXp": {
+          "type": "number",
+          "description": "The total experience points the user has accumulated."
+        },
+        "bio": {
+          "type": "string",
+          "description": "A short biography of the user."
+        }
+      },
+      "required": [
+        "id",
+        "userType",
+        "name",
+        "email",
+        "totalXp"
+      ]
+    },
+    "Follow": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Follow",
+        "type": "object",
+        "description": "Represents a follow relationship. The document ID is the UID of the followed/following user.",
+        "properties": {
+            "userId": {
+                "type": "string",
+                "description": "The UID of the user being followed or the user who is following."
+            },
+            "followedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Timestamp of when the follow action occurred."
+            }
+        },
+        "required": ["userId", "followedAt"]
+    },
+    "Post": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Post",
+      "type": "object",
+      "description": "Represents a post in the social feed.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who created the post."
+        },
+        "content": {
+          "type": "string",
+          "description": "The text content of the post."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "The URL of the image attached to the post (as a data URI)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the post was created."
+        },
+        "likeCount": {
+          "type": "number",
+          "description": "The number of likes the post has received."
+        },
+        "commentCount": {
+          "type": "number",
+          "description": "The number of comments on the post."
+        }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "Like": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Like",
+      "type": "object",
+      "description": "Represents a user's like on a post.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who liked the post."
+        }
+      },
+      "required": ["userId"]
+    },
+    "Comment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Comment",
+      "type": "object",
+      "description": "Represents a comment on a post.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who made the comment."
+        },
+        "content": {
+          "type": "string",
+          "description": "The text content of the comment."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the comment was created."
+        }
+      },
+      "required": ["userId", "content", "createdAt"]
+    },
+    "Resource": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Resource",
+      "type": "object",
+      "description": "Represents a learning resource in the content library.",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the resource." },
+        "description": { "type": "string", "description": "A description of the resource." },
+        "transcript": { "type": "string", "description": "A full transcript or detailed summary of the resource content." },
+        "subject": { "type": "string", "description": "The subject category of the resource (e.g., Physics, Math)." },
+        "type": { "type": "string", "enum": ["Video", "PDF", "Notes"], "description": "The type of the resource file." },
+        "fileUrl": { "type": "string", "description": "The URL to the resource file/video, potentially from Firebase Storage." },
+        "language": {
+          "type": "string",
+          "description": "The original language of the resource content.",
+          "enum": ["English", "Hindi", "Tamil", "Bengali", "Kannada"]
+        },
+        "uploaderId": { "type": "string", "description": "The ID of the user who uploaded the resource." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the resource was uploaded." }
+      },
+      "required": ["title", "subject", "type", "fileUrl", "uploaderId", "createdAt", "language"]
+    },
+    "Summary": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Summary",
+      "type": "object",
+      "description": "Represents an AI-generated summary of a resource in a specific language.",
+      "properties": {
+        "language": {
+          "type": "string",
+          "description": "The language of the summary."
+        },
+        "summary": {
+          "type": "string",
+          "description": "The AI-generated summary text."
+        },
+        "audioDataUri": {
+            "type": "string",
+            "description": "A base64 data URI of the spoken summary audio."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the summary was generated."
+        }
+      },
+      "required": ["language", "summary", "createdAt"]
+    },
+    "CachedQuestion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Cached Question",
+      "type": "object",
+      "description": "Represents a question that has been answered by the AI and cached for future use.",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The text of the question that was asked."
+        },
+        "language": {
+          "type": "string",
+          "description": "The language of the question."
+        },
+        "answer": {
+          "type": "string",
+          "description": "The AI-generated answer."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the answer was cached."
+        }
+      },
+      "required": ["question", "language", "answer", "createdAt"]
+    },
+    "ClassSection": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ClassSection",
+      "type": "object",
+      "description": "Represents a class section (e.g., IS-B).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ClassSection entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the class section (e.g., 'IS-B')."
+        },
+        "studentKey": {
+          "type": "string",
+          "description": "Key for students to access the class section."
+        },
+        "teacherKey": {
+          "type": "string",
+          "description": "Unique key for the teacher to access the class section."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "studentKey",
+        "teacherKey"
+      ]
+    },
+    "Quiz": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Quiz",
+      "type": "object",
+      "description": "Represents a quiz within a class section.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Quiz entity."
+        },
+        "classSectionId": {
+          "type": "string",
+          "description": "Reference to ClassSection. (Relationship: ClassSection 1:N Quiz)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the quiz."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the quiz."
+        }
+      },
+      "required": [
+        "id",
+        "classSectionId",
+        "name",
+        "description"
+      ]
+    },
+    "Question": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Question",
+      "type": "object",
+      "description": "Represents a question within a quiz.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Question entity."
+        },
+        "quizId": {
+          "type": "string",
+          "description": "Reference to Quiz. (Relationship: Quiz 1:N Question)"
+        },
+        "text": {
+          "type": "string",
+          "description": "Text of the question in English."
+        },
+        "correctAnswerId": {
+          "type": "string",
+          "description": "Reference to Answer. (Relationship: Question 1:1 Answer - The correct answer)"
+        }
+      },
+      "required": [
+        "id",
+        "quizId",
+        "text",
+        "correctAnswerId"
+      ]
+    },
+    "Answer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Answer",
+      "type": "object",
+      "description": "Represents an answer option for a question.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Answer entity."
+        },
+        "questionId": {
+          "type": "string",
+          "description": "Reference to Question. (Relationship: Question 1:N Answer)"
+        },
+        "text": {
+          "type": "string",
+          "description": "Text of the answer option in English."
+        },
+        "isCorrect": {
+          "type": "boolean",
+          "description": "Indicates if the answer is the correct answer for the question"
+        }
+      },
+      "required": [
+        "id",
+        "questionId",
+        "text"
+      ]
+    },
+    "StudentQuizResult": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StudentQuizResult",
+      "type": "object",
+      "description": "Represents a student's result on a specific quiz.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the StudentQuizResult entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N StudentQuizResult)"
+        },
+        "quizId": {
+          "type": "string",
+          "description": "Reference to Quiz. (Relationship: Quiz 1:N StudentQuizResult)"
+        },
+        "score": {
+          "type": "number",
+          "description": "The student's score on the quiz."
+        },
+        "totalQuestions": {
+          "type": "number",
+          "description": "The total number of questions in the quiz."
+        },
+        "submissionDateTime": {
+          "type": "string",
+          "description": "Date and time when the quiz was submitted.",
+          "format": "date-time"
+        },
+        "timeTaken": {
+          "type": "number",
+          "description": "The time in seconds it took the student to complete the quiz."
+        },
+        "xpGained": {
+          "type": "number",
+          "description": "The amount of experience points gained from this quiz."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "quizId",
+        "score",
+        "totalQuestions",
+        "submissionDateTime",
+        "timeTaken",
+        "xpGained"
+      ]
+    },
+    "StudentAnswer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StudentAnswer",
+      "type": "object",
+      "description": "Represents a student's answer to a specific question in a quiz.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the StudentAnswer entity."
+        },
+        "studentQuizResultId": {
+          "type": "string",
+          "description": "Reference to StudentQuizResult. (Relationship: StudentQuizResult 1:N StudentAnswer)"
+        },
+        "questionId": {
+          "type": "string",
+          "description": "Reference to Question. (Relationship: Question 1:N StudentAnswer)"
+        },
+        "answerId": {
+          "type": "string",
+          "description": "Reference to Answer. (Relationship: Answer 1:N StudentAnswer)"
+        }
+      },
+      "required": [
+        "id",
+        "studentQuizResultId",
+        "questionId",
+        "answerId"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Accessible by all authenticated users.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/users/{userId}/followers/{followerId}",
+        "definition": {
+          "entityName": "Follow",
+          "schema": {
+            "$ref": "#/backend/entities/Follow"
+          },
+          "description": "A list of users who are following the user at {userId}.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The user being followed."
+            },
+            {
+              "name": "followerId",
+              "description": "The user who is following."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/following/{followingId}",
+        "definition": {
+          "entityName": "Follow",
+          "schema": {
+            "$ref": "#/backend/entities/Follow"
+          },
+          "description": "A list of users that the user at {userId} is following.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The user who is following."
+            },
+            {
+              "name": "followingId",
+              "description": "The user being followed."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/posts/{postId}",
+        "definition": {
+          "entityName": "Post",
+          "schema": { "$ref": "#/backend/entities/Post" },
+          "description": "Global collection of all posts.",
+          "params": [{ "name": "postId", "description": "The unique ID of the post." }]
+        }
+      },
+      {
+        "path": "/posts/{postId}/likes/{userId}",
+        "definition": {
+          "entityName": "Like",
+          "schema": { "$ref": "#/backend/entities/Like" },
+          "description": "Collection of users who liked a post.",
+          "params": [
+            { "name": "postId", "description": "The ID of the post." },
+            { "name": "userId", "description": "The ID of the user who liked the post." }
+          ]
+        }
+      },
+      {
+        "path": "/posts/{postId}/comments/{commentId}",
+        "definition": {
+          "entityName": "Comment",
+          "schema": { "$ref": "#/backend/entities/Comment" },
+          "description": "Collection of comments for a post.",
+          "params": [
+            { "name": "postId", "description": "The ID of the post." },
+            { "name": "commentId", "description": "The unique ID of the comment." }
+          ]
+        }
+      },
+      {
+        "path": "/resources/{resourceId}",
+        "definition": {
+          "entityName": "Resource",
+          "schema": {
+            "$ref": "#/backend/entities/Resource"
+          },
+          "description": "Global collection of all learning resources.",
+          "params": [
+            {
+              "name": "resourceId",
+              "description": "The unique ID of the resource."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/resources/{resourceId}/summaries/{language}",
+        "definition": {
+          "entityName": "Summary",
+          "schema": {
+            "$ref": "#/backend/entities/Summary"
+          },
+          "description": "Stores cached AI-generated summaries for a resource in various languages.",
+          "params": [
+            {
+              "name": "resourceId",
+              "description": "The ID of the resource."
+            },
+            {
+              "name": "language",
+              "description": "The language of the summary (e.g., 'English', 'Hindi')."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/cachedQuestions/{questionId}",
+        "definition": {
+          "entityName": "CachedQuestion",
+          "schema": {
+            "$ref": "#/backend/entities/CachedQuestion"
+          },
+          "description": "Stores cached AI-generated answers to user questions.",
+          "params": [
+            {
+              "name": "questionId",
+              "description": "The unique ID of the cached question."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/classSections/{classSectionId}",
+        "definition": {
+          "entityName": "ClassSection",
+          "schema": {
+            "$ref": "#/backend/entities/ClassSection"
+          },
+          "description": "Stores class section information. Accessible by teachers and students with the correct key.",
+          "params": [
+            {
+              "name": "classSectionId",
+              "description": "The unique identifier of the class section."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/classSections/{classSectionId}/quizzes/{quizId}",
+        "definition": {
+          "entityName": "Quiz",
+          "schema": {
+            "$ref": "#/backend/entities/Quiz"
+          },
+          "description": "Stores quiz information for a class section. Includes denormalized 'classSectionId' for authorization independence.",
+          "params": [
+            {
+              "name": "classSectionId",
+              "description": "The unique identifier of the class section."
+            },
+            {
+              "name": "quizId",
+              "description": "The unique identifier of the quiz."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/classSections/{classSectionId}/quizzes/{quizId}/questions/{questionId}",
+        "definition": {
+          "entityName": "Question",
+          "schema": {
+            "$ref": "#/backend/entities/Question"
+          },
+          "description": "Stores questions for a quiz. Includes denormalized 'classSectionId' and 'quizId' for authorization independence.",
+          "params": [
+            {
+              "name": "classSectionId",
+              "description": "The unique identifier of the class section."
+            },
+            {
+              "name": "quizId",
+              "description": "The unique identifier of the quiz."
+            },
+            {
+              "name": "questionId",
+              "description": "The unique identifier of the question."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/classSections/{classSectionId}/quizzes/{quizId}/questions/{questionId}/answers/{answerId}",
+        "definition": {
+          "entityName": "Answer",
+          "schema": {
+            "$ref": "#/backend/entities/Answer"
+          },
+          "description": "Stores answer options for a question. Includes denormalized 'classSectionId', 'quizId', and 'questionId' for authorization independence.",
+          "params": [
+            {
+              "name": "classSectionId",
+              "description": "The unique identifier of the class section."
+            },
+            {
+              "name": "quizId",
+              "description": "The unique identifier of the quiz."
+            },
+            {
+              "name": "questionId",
+              "description": "The unique identifier of the question."
+            },
+            {
+              "name": "answerId",
+              "description": "The unique identifier of the answer."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/studentQuizResults/{studentQuizResultId}",
+        "definition": {
+          "entityName": "StudentQuizResult",
+          "schema": {
+            "$ref": "#/backend/entities/StudentQuizResult"
+          },
+          "description": "Stores the quiz results for a student. Accessible only by the student and teachers of the class section.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "studentQuizResultId",
+              "description": "The unique identifier of the student quiz result."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/studentQuizResults/{studentQuizResultId}/studentAnswers/{studentAnswerId}",
+        "definition": {
+          "entityName": "StudentAnswer",
+          "schema": {
+            "$ref": "#/backend/entities/StudentAnswer"
+          },
+          "description": "Stores the student's answer to a specific question in a quiz. Accessible only by the student and teachers of the class section.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "studentQuizResultId",
+              "description": "The unique identifier of the student quiz result."
+            },
+            {
+              "name": "studentAnswerId",
+              "description": "The unique identifier of the student answer."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to securely manage quizzes, questions, answers, and student results within class sections, adhering to the principles of Authorization Independence and Structural Segregation. The keys (teacherKey, studentKey) are not stored in the database itself, but validated upon user login to determine roles. Once validated the user's role could be stored in local storage. \n\n**Authorization Independence:**\nTo ensure authorization independence and avoid using `get()` calls in security rules, the structure denormalizes the `classSectionId` into the `Quiz` collection and its subcollections (`questions`, `answers`, `studentQuizResults`, `studentAnswers`). This enables direct access control based on the class section. While the keys themselves are not stored, the fact that the user has access to a class section (determined at login) grants specific permissions within that section's data. Keys should never be stored in the database, this is for security reasons. The system checks the provided key against the expected value during authentication, granting either teacher or student access based on the key's validity. This determination can inform the roles to apply within the application.\n\n**Structural Segregation:**\nThe data is segregated based on ownership and function. User data is stored separately under `/users/{userId}`, while class sections and their associated quizzes are stored under `/classSections/{classSectionId}`. Social features like posts, likes, and comments are stored in a global `/posts` collection with subcollections for likes and comments to allow for a public feed and efficient querying. Questions, answers, student results, and student answers are further segregated as subcollections of quizzes within class sections, maintaining a clear hierarchy and predictable access patterns.\n\n**QAPs (Rules are not Filters):**\nSecure `list` operations are supported by the path-based ownership model for user data and the denormalized `classSectionId` for quizzes and related data. Security rules can efficiently filter list operations based on the requesting user's ID or the accessible `classSectionId`, without needing to iterate through documents and inspect their contents. The keys provide a means to define context and segregate different access based on role, and are not stored in the database, as they should be."
+  }
+}
+
+  

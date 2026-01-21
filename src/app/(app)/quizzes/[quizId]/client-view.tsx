@@ -1,0 +1,628 @@
+'use client';
+
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import {
+  useFirestore,
+  useDoc,
+  useCollection,
+  useMemoFirebase,
+  updateDocumentNonBlocking,
+  addDocumentNonBlocking,
+  deleteDocumentNonBlocking,
+  useUser,
+} from '@/firebase';
+import {
+  doc,
+  collection,
+  writeBatch,
+  DocumentReference,
+  Query,
+  getDocs,
+  serverTimestamp,
+  increment,
+} from 'firebase/firestore';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Trash2,
+  PlusCircle,
+  Loader2,
+  Check,
+  X,
+  Save,
+  Languages,
+} from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
+import { languages, Language } from '@/lib/data';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { translateText } from '@/ai/flows/translate-text';
+
+interface Answer {
+  id: string;
+  text: string;
+  isCorrect: boolean;
+  ref: DocumentReference;
+}
+
+interface Question {
+  id: string;
+  text: string;
+  correctAnswerId?: string;
+  ref: DocumentReference;
+  answers: Answer[];
+}
+
+interface Quiz {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export default function QuizClientView({ quizId }: { quizId: string }) {
+  const firestore = useFirestore();
+  const [userType, setUserType] = useState<'student' | 'teacher' | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const quizRef = useMemoFirebase(
+    () =>
+      firestore ? doc(firestore, `classSections/IS-B/quizzes/${quizId}`) : null,
+    [firestore, quizId]
+  );
+  const questionsRef = useMemoFirebase(
+    () => (quizRef ? collection(quizRef, 'questions') : null),
+    [quizRef]
+  );
+
+  const { data: quiz, isLoading: isQuizLoading } = useDoc<Quiz>(quizRef);
+  const { data: questionsData, isLoading: areQuestionsLoading } =
+    useCollection<Omit<Question, 'answers' | 'ref'>>(questionsRef);
+
+  useEffect(() => {
+    const type = localStorage.getItem('userType') as
+      | 'student'
+      | 'teacher'
+      | null;
+    setUserType(type);
+    setLoading(false);
+  }, []);
+
+  if (isQuizLoading || areQuestionsLoading || loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!quiz) {
+    return <div>Quiz not found.</div>;
+  }
+
+  const questions =
+    firestore && questionsData
+      ? questionsData.map(q => ({
+          ...q,
+          ref: doc(firestore, `classSections/IS-B/quizzes/${quizId}/questions/${q.id}`),
+        }))
+      : [];
+
+  return (
+    <div className="flex-1 space-y-6 p-4 md:p-8">
+      {userType === 'teacher' ? (
+        <EditableQuizHeader quiz={quiz} quizRef={quizRef} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-3xl font-bold font-headline">
+              {quiz.name}
+            </CardTitle>
+            <CardDescription>{quiz.description}</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {userType === 'teacher' ? (
+        <TeacherView questions={questions || []} questionsRef={questionsRef} />
+      ) : (
+        <StudentView quizId={quizId} questions={questions} />
+      )}
+    </div>
+  );
+}
+
+function EditableQuizHeader({
+  quiz,
+  quizRef,
+}: {
+  quiz: Quiz;
+  quizRef: DocumentReference | null;
+}) {
+  const [name, setName] = useState(quiz.name);
+  const [description, setDescription] = useState(quiz.description);
+
+  const handleSave = () => {
+    if (!quizRef) return;
+    if (name !== quiz.name || description !== quiz.description) {
+      updateDocumentNonBlocking(quizRef, { name, description });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="space-y-4">
+        <div>
+          <Label htmlFor="quiz-title" className="text-sm font-medium">
+            Quiz Title
+          </Label>
+          <Input
+            id="quiz-title"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onBlur={handleSave}
+            disabled={!quizRef}
+            className="text-3xl font-bold font-headline h-auto p-0 border-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+        </div>
+        <div>
+          <Label htmlFor="quiz-description" className="text-sm font-medium">
+            Description
+          </Label>
+          <Textarea
+            id="quiz-description"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            onBlur={handleSave}
+            disabled={!quizRef}
+            className="border-none p-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-muted-foreground"
+          />
+        </div>
+      </CardHeader>
+    </Card>
+  );
+}
+
+// --- Teacher View ---
+function TeacherView({
+  questions,
+  questionsRef,
+}: {
+  questions: (Omit<Question, 'answers'> & { ref: DocumentReference })[];
+  questionsRef: Query | null;
+}) {
+  const handleAddQuestion = () => {
+    if (!questionsRef) return;
+    addDocumentNonBlocking(questionsRef, {
+      text: 'New Question',
+      correctAnswerId: null,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {questions.map(
+        (q: Omit<Question, 'answers'> & { ref: DocumentReference }, index: number) => (
+          <EditableQuestion key={q.id} question={q} index={index} />
+        )
+      )}
+      <Button onClick={handleAddQuestion} variant="outline" disabled={!questionsRef}>
+        <PlusCircle className="mr-2" /> Add Question
+      </Button>
+    </div>
+  );
+}
+
+function EditableQuestion({
+  question,
+  index,
+}: {
+  question: Omit<Question, 'answers'> & { ref: DocumentReference };
+  index: number;
+}) {
+  const [questionText, setQuestionText] = useState(question.text || '');
+
+  const handleBlur = () => {
+    if (question.text !== questionText) {
+      updateDocumentNonBlocking(question.ref, { text: questionText });
+    }
+  };
+
+  const handleQuestionDelete = () => {
+    // Also delete sub-collection of answers
+    getDocs(collection(question.ref, 'answers')).then(snapshot => {
+      snapshot.forEach(doc => {
+        deleteDocumentNonBlocking(doc.ref);
+      });
+    });
+    deleteDocumentNonBlocking(question.ref);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-4">
+          <Label htmlFor={`q-${question.id}`} className="text-lg font-semibold">
+            Question {index + 1}
+          </Label>
+          <Input
+            id={`q-${question.id}`}
+            value={questionText}
+            onChange={e => setQuestionText(e.target.value)}
+            onBlur={handleBlur}
+            className="flex-1"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleQuestionDelete}
+            aria-label="Delete question"
+          >
+            <Trash2 className="h-5 w-5 text-destructive" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <EditableAnswersList question={question} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function EditableAnswersList({
+  question,
+}: {
+  question: Omit<Question, 'answers'> & { ref: DocumentReference };
+}) {
+  const firestore = useFirestore();
+  const answersRef = useMemoFirebase(
+    () => (firestore ? collection(question.ref, 'answers') : null),
+    [firestore, question.ref]
+  );
+  const { data: answers, isLoading } = useCollection<Omit<Answer, 'ref'>>(answersRef);
+
+  const handleAddAnswer = () => {
+    if (answersRef) {
+      addDocumentNonBlocking(answersRef, { text: 'New Answer', isCorrect: false });
+    }
+  };
+
+  if (isLoading) {
+    return <Loader2 className="animate-spin" />;
+  }
+
+  return (
+    <div className="space-y-4 pl-12">
+      {(answers || []).map(answer => (
+        <EditableAnswer
+          key={answer.id}
+          answer={{...answer, ref: doc(answersRef!.firestore, answersRef!.path, answer.id)}}
+          question={question}
+          allAnswers={answers || []}
+        />
+      ))}
+      {(answers || []).length < 5 && (
+        <Button onClick={handleAddAnswer} variant="ghost" size="sm">
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Answer
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function EditableAnswer({
+  answer,
+  question,
+  allAnswers
+}: {
+  answer: Answer;
+  question: Omit<Question, 'answers'> & { ref: DocumentReference };
+  allAnswers: Omit<Answer, 'ref'>[]
+}) {
+  const firestore = useFirestore();
+  const [answerText, setAnswerText] = useState(answer.text || '');
+
+  const handleBlur = () => {
+    if (answer.text !== answerText) {
+      updateDocumentNonBlocking(answer.ref, { text: answerText });
+    }
+  };
+
+  const handleSetCorrect = async () => {
+    if (!firestore) return;
+    const batch = writeBatch(firestore);
+    
+    // Set this answer as correct
+    batch.update(answer.ref, { isCorrect: true });
+    // Set this as the correct answer ID on the question
+    batch.update(question.ref, { correctAnswerId: answer.id });
+
+    // Set all other answers for this question to incorrect
+    allAnswers.forEach(ans => {
+      if (ans.id !== answer.id) {
+        const otherAnswerRef = doc(answer.ref.parent, ans.id);
+        batch.update(otherAnswerRef, { isCorrect: false });
+      }
+    });
+
+    await batch.commit();
+  };
+
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant={answer.isCorrect ? 'default' : 'outline'}
+        size="icon"
+        onClick={handleSetCorrect}
+        aria-label="Set as correct answer"
+      >
+        <Check className="h-4 w-4" />
+      </Button>
+      <Input
+        value={answerText}
+        onChange={e => setAnswerText(e.target.value)}
+        onBlur={handleBlur}
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => deleteDocumentNonBlocking(answer.ref)}
+        aria-label="Delete answer"
+      >
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
+  );
+}
+
+
+// --- Student View ---
+type TranslatedContent = {
+  questionText: string;
+  answers: { [answerId: string]: string };
+};
+
+function StudentView({
+  quizId,
+  questions,
+}: {
+  quizId: string;
+  questions: (Omit<Question, 'answers' | 'ref'> & { ref: DocumentReference })[] | null;
+}) {
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>(
+    {}
+  );
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>('English');
+  const firestore = useFirestore();
+  const { user } = useUser();
+  const [startTime, setStartTime] = useState(Date.now());
+
+
+  const handleAnswerChange = (questionId: string, answerId: string) => {
+    setSelectedAnswers(prev => ({ ...prev, [questionId]: answerId }));
+  };
+
+  const handleSubmit = () => {
+    if (!questions || !firestore || !user) return;
+    
+    let newScore = 0;
+    questions.forEach((q: Omit<Question, 'answers' | 'ref'>) => {
+      if (selectedAnswers[q.id] === q.correctAnswerId) {
+        newScore++;
+      }
+    });
+    
+    const timeTaken = (Date.now() - startTime) / 1000; // in seconds
+    const xpGained = newScore * 10; // 10 XP per correct answer
+
+    setScore(newScore);
+    setSubmitted(true);
+    
+    const resultsRef = collection(firestore, 'users', user.uid, 'studentQuizResults');
+    addDocumentNonBlocking(resultsRef, {
+        userId: user.uid,
+        quizId: quizId,
+        score: newScore,
+        totalQuestions: questions.length,
+        submissionDateTime: serverTimestamp(),
+        timeTaken,
+        xpGained
+    });
+
+    const userProfileRef = doc(firestore, 'users', user.uid);
+    updateDocumentNonBlocking(userProfileRef, {
+        totalXp: increment(xpGained)
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="p-4 flex items-center gap-4">
+            <Languages className="h-5 w-5 text-muted-foreground"/>
+            <Label htmlFor="language-select" className="text-sm font-medium">Quiz Language</Label>
+            <Select onValueChange={(value) => setSelectedLanguage(value as Language)} defaultValue={selectedLanguage}>
+                <SelectTrigger id="language-select" className="w-[180px]">
+                    <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                    {languages.map(lang => (
+                        <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </CardContent>
+      </Card>
+      
+      {questions?.map((q, index: number) => (
+        <QuestionDisplay
+          key={q.id}
+          question={q}
+          index={index}
+          selectedAnswer={selectedAnswers[q.id]}
+          onAnswerChange={handleAnswerChange}
+          submitted={submitted}
+          language={selectedLanguage}
+        />
+      ))}
+      <CardFooter className="justify-end p-0 pt-4">
+        {!submitted ? (
+          <Button
+            onClick={handleSubmit}
+            disabled={!questions || Object.keys(selectedAnswers).length !== questions.length}
+          >
+            Submit Quiz
+          </Button>
+        ) : (
+          <div className="text-xl font-bold">
+            Your Score: {score} / {questions?.length}
+          </div>
+        )}
+      </CardFooter>
+    </div>
+  );
+}
+
+function QuestionDisplay({
+  question,
+  index,
+  selectedAnswer,
+  onAnswerChange,
+  submitted,
+  language
+}: {
+  question: Omit<Question, 'answers' | 'ref'> & { ref: DocumentReference };
+  index: number;
+  selectedAnswer: string;
+  onAnswerChange: (questionId: string, answerId: string) => void;
+  submitted: boolean;
+  language: Language;
+}) {
+  const firestore = useFirestore();
+  const answersRef = useMemoFirebase(
+    () => (firestore ? collection(question.ref, 'answers') : null),
+    [firestore, question.ref]
+  );
+  const { data: answersData, isLoading: areAnswersLoading } =
+    useCollection<Omit<Answer, 'ref'>>(answersRef);
+
+  const [translatedContent, setTranslatedContent] = useState<TranslatedContent | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  const translateContent = useCallback(async (lang: Language, qText: string, ans: Omit<Answer, 'ref'>[]) => {
+    const originalAnswers: {[id: string]: string} = {};
+    ans.forEach(a => originalAnswers[a.id] = a.text);
+    const originalContent = { questionText: qText, answers: originalAnswers };
+
+    if (lang === 'English') {
+      setTranslatedContent(originalContent);
+      return;
+    }
+    
+    setIsTranslating(true);
+    try {
+      const answersToTranslate = ans.map(a => ({ id: a.id, text: a.text }));
+      const result = await translateText({
+        question: qText,
+        answers: answersToTranslate,
+        targetLanguage: lang,
+      });
+
+      const translatedAnswers: {[id: string]: string} = {};
+      result.translatedAnswers.forEach(a => {
+        translatedAnswers[a.id] = a.text;
+      });
+
+      setTranslatedContent({
+        questionText: result.translatedQuestion,
+        answers: translatedAnswers,
+      });
+
+    } catch (e) {
+      console.error("Translation failed", e);
+      // Fallback to English on failure
+       setTranslatedContent(originalContent);
+    } finally {
+      setIsTranslating(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (question.text && answersData) {
+      translateContent(language, question.text, answersData);
+    }
+  }, [language, question.text, answersData, translateContent]);
+
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          Question {index + 1}: {isTranslating ? <Loader2 className="inline-block animate-spin" /> : translatedContent?.questionText || question.text}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {areAnswersLoading || isTranslating ? (
+          <Loader2 className="animate-spin" />
+        ) : (
+          <RadioGroup
+            value={selectedAnswer}
+            onValueChange={value => onAnswerChange(question.id, value)}
+            disabled={submitted}
+            className="space-y-2"
+          >
+            {answersData?.map(answer => {
+              const isSelected = selectedAnswer === answer.id;
+              const isCorrectAnswer = answer.id === question.correctAnswerId;
+              const answerText = translatedContent?.answers[answer.id] || answer.text;
+
+              let ringColor = 'ring-transparent';
+              if (submitted) {
+                if (isCorrectAnswer) {
+                  ringColor = 'ring-green-500';
+                } else if (isSelected && !isCorrectAnswer) {
+                  ringColor = 'ring-red-500';
+                }
+              }
+
+              return (
+                <div
+                  key={answer.id}
+                  className={`flex items-center space-x-3 rounded-md border p-3 transition-all ring-2 ${ringColor}`}
+                >
+                  <RadioGroupItem value={answer.id} id={answer.id} />
+                  <Label htmlFor={answer.id} className="flex-1 cursor-pointer">
+                    {answerText}
+                  </Label>
+                  {submitted && isSelected && !isCorrectAnswer && (
+                    <X className="text-red-600" />
+                  )}
+                  {submitted && isCorrectAnswer && (
+                    <Check className="text-green-600" />
+                  )}
+                </div>
+              );
+            })}
+          </RadioGroup>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
