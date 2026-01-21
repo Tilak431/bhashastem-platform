@@ -596,7 +596,10 @@ function AiTranslationEngine({
       }
 
       // Generate Audio
-      const { audioDataUri } = await generateAudio({ text: textToSpeak });
+      const { audioDataUri } = await generateAudio({
+        text: textToSpeak,
+        language: audioLang
+      });
 
       setAudioResultUri(audioDataUri);
 
