@@ -81,7 +81,7 @@ export default function RecommendationsPage() {
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-       <div className="flex flex-col space-y-2">
+      <div className="flex flex-col space-y-2">
         <h2 className="text-3xl font-bold tracking-tight font-headline">
           AI Recommendations
         </h2>
@@ -107,7 +107,7 @@ export default function RecommendationsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Language</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value} name={field.name}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select your language" />
@@ -172,18 +172,18 @@ export default function RecommendationsPage() {
           </CardHeader>
           <CardContent className="flex-1">
             {state.status === "loading" && (
-                <div className="flex items-center justify-center h-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
             )}
             {state.status === 'idle' && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                  <Sparkles className="h-12 w-12 mb-4" />
-                  <p className="text-lg">Your recommendations will appear here.</p>
-                  <p>Fill out the form to get started.</p>
+                <Sparkles className="h-12 w-12 mb-4" />
+                <p className="text-lg">Your recommendations will appear here.</p>
+                <p>Fill out the form to get started.</p>
               </div>
             )}
-             {state.status === 'error' && state.message && (
+            {state.status === 'error' && state.message && (
               <div className="flex items-center justify-center h-full text-destructive">
                 <p>{state.message}</p>
               </div>
