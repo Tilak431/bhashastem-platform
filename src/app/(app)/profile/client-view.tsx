@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -7,6 +6,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -18,8 +18,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Medal, Rocket, ShieldCheck, Target, Award, Star, Edit, Check, Settings, UserPlus, UserCheck } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import {
+  Loader2, Medal, Rocket, ShieldCheck, Target, Award, Star, Edit, Check, Settings,
+  UserPlus, UserCheck, Zap, Trophy, Crown, Camera, X
+} from 'lucide-react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   useUser,
   useCollection,
@@ -27,22 +30,17 @@ import {
   useMemoFirebase,
   useDoc,
   updateDocumentNonBlocking,
+  addDocumentNonBlocking // Ensure this is available if needed
 } from '@/firebase';
-import { collection, query, orderBy, doc, DocumentReference, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, doc, DocumentReference, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
-const mockAchievements = [
-  { id: 'a1', name: 'First Quiz', description: 'Completed your first quiz.', Icon: Rocket, unlocked: true },
-  { id: 'a2', name: 'Physics Novice', description: 'Completed 3 Physics quizzes.', Icon: Medal, unlocked: true },
-  { id: 'a3', name: 'Perfect Score', description: 'Got a 100% on any quiz.', Icon: Target, unlocked: true },
-  { id: 'a4', name: 'Chemistry Whiz', description: 'Score above 90% in a Chemistry quiz.', Icon: ShieldCheck, unlocked: true},
-  { id: 'a5', name: 'Biology Buff', description: 'Complete all Biology quizzes.', Icon: Medal, unlocked: false },
-  { id: 'a6', name: 'Math Magician', description: 'Get a perfect score in Math.', Icon: Target, unlocked: false },
-];
-
+// Types
 interface StudentQuizResult {
   id: string;
   quizId: string;
@@ -51,34 +49,119 @@ interface StudentQuizResult {
   submissionDateTime: { seconds: number; nanoseconds: number };
   timeTaken: number;
   xpGained: number;
+  accuracy?: string;
 }
 
 interface UserProfile {
-    name: string;
-    totalXp: number;
-    bio: string;
+  name: string;
+  username?: string;
+  totalXp: number;
+  bio: string;
+  photoURL?: string;
+  userType?: 'student' | 'teacher';
 }
 
 interface Follow {
-    userId: string;
-    followedAt: any;
+  userId: string;
+  followedAt: any;
+  name?: string; // Optimistic
+  photoURL?: string; // Optimistic
 }
 
-
+// Game Logic
 const XP_PER_LEVEL = 100;
+const RANKS = [
+  { name: 'Spark Novice', minLevel: 1, color: 'text-blue-500' },
+  { name: 'Fusion Apprentice', minLevel: 5, color: 'text-violet-500' },
+  { name: 'Quantum Adept', minLevel: 10, color: 'text-cyan-500' },
+  { name: 'Cosmos Master', minLevel: 20, color: 'text-amber-500' },
+  { name: 'Universal Legend', minLevel: 50, color: 'text-rose-500' }
+];
+
+function getRank(level: number) {
+  return RANKS.slice().reverse().find(r => level >= r.minLevel) || RANKS[0];
+}
 
 function calculateLevel(totalXp: number) {
-    if (totalXp < 0) totalXp = 0;
-    const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
-    const xpForCurrentLevel = (level - 1) * XP_PER_LEVEL;
-    const xpForNextLevel = level * XP_PER_LEVEL;
-    const xpProgress = totalXp - xpForCurrentLevel;
-    const xpToNextLevel = xpForNextLevel - totalXp;
-    const progressPercentage = (xpProgress / XP_PER_LEVEL) * 100;
-    
-    return { level, xpProgress, xpToNextLevel, progressPercentage, xpForNextLevel };
+  if (totalXp < 0) totalXp = 0;
+  const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
+  const xpForCurrentLevel = (level - 1) * XP_PER_LEVEL;
+  const xpForNextLevel = level * XP_PER_LEVEL;
+  const xpProgress = totalXp - xpForCurrentLevel;
+  const xpToNextLevel = xpForNextLevel - totalXp;
+  /* const progressPercentage = (xpProgress / XP_PER_LEVEL) * 100; */ // Buggy
+  const progressPercentage = Math.min(100, Math.max(0, (xpProgress / XP_PER_LEVEL) * 100));
+
+  return { level, xpProgress, xpToNextLevel, progressPercentage, xpForNextLevel };
 }
 
+// Subcomponents
+
+function FollowListDialog({
+  title,
+  triggerCount,
+  userIds
+}: {
+  title: string,
+  triggerCount: number,
+  userIds: string[]
+}) {
+  // Note: In a real app, we should fetch users in batch or store names.
+  // Here we show IDs or placeholder if name not cached.
+  // For simplicity in this demo, we'll list IDs as "User"
+  // Ideally, we fetching user profiles for these IDs.
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <div className="cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors text-center">
+          <p className="text-xl font-bold">{triggerCount}</p>
+          <p className="text-sm text-muted-foreground">{title}</p>
+        </div>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[300px] overflow-y-auto space-y-2">
+          {userIds.length === 0 ? <p className="text-muted-foreground text-center py-4">No {title.toLowerCase()} yet.</p> : userIds.map((uid) => (
+            <div key={uid} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={`https://picsum.photos/seed/${uid}/40/40`} />
+                <AvatarFallback>U</AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium">User {uid.slice(0, 5)}...</span>
+              {/* Real implementation needs fetch */}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AchievementBadge({
+  label,
+  desc,
+  Icon,
+  unlocked
+}: {
+  label: string,
+  desc: string,
+  Icon: any,
+  unlocked: boolean
+}) {
+  return (
+    <div className={`relative flex flex-col items-center text-center p-4 rounded-xl border-2 transition-all ${unlocked ? 'border-primary/50 bg-primary/5 shadow-md scale-105' : 'border-dashed border-muted bg-muted/10 opacity-60 grayscale'}`}>
+      {unlocked && <div className="absolute top-2 right-2 text-yellow-500"><Star className="h-4 w-4 fill-current animate-pulse" /></div>}
+      <div className={`h-14 w-14 rounded-full flex items-center justify-center mb-3 ${unlocked ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+        <Icon className="h-8 w-8" />
+      </div>
+      <p className="font-bold text-sm mb-1">{label}</p>
+      <p className="text-[10px] text-muted-foreground leading-tight">{desc}</p>
+    </div>
+  )
+}
 
 function QuizHistoryRow({ result }: { result: StudentQuizResult }) {
   const firestore = useFirestore();
@@ -91,9 +174,7 @@ function QuizHistoryRow({ result }: { result: StudentQuizResult }) {
   const { data: quiz } = useDoc(quizRef);
 
   useEffect(() => {
-    if (quiz) {
-      setQuizName(quiz.name);
-    }
+    if (quiz) setQuizName(quiz.name);
   }, [quiz]);
 
   const formatTime = (seconds: number) => {
@@ -104,46 +185,69 @@ function QuizHistoryRow({ result }: { result: StudentQuizResult }) {
   };
 
   return (
-    <TableRow>
-      <TableCell className="font-medium truncate max-w-[150px]">{quizName || 'Loading...'}</TableCell>
-       <TableCell><Badge variant="outline">{result.xpGained} XP</Badge></TableCell>
-      <TableCell><Badge variant="outline">{result.score} / {result.totalQuestions}</Badge></TableCell>
-      <TableCell className="text-center text-muted-foreground">{formatTime(result.timeTaken)}</TableCell>
-      <TableCell className="text-right text-muted-foreground">{format(new Date(result.submissionDateTime.seconds * 1000), 'yyyy-MM-dd')}</TableCell>
-    </TableRow>
+    <Dialog>
+      <DialogTrigger asChild>
+        <TableRow className="cursor-pointer hover:bg-muted/50">
+          <TableCell className="font-medium truncate max-w-[150px]">{quizName || 'Loading...'}</TableCell>
+          <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{result.xpGained} XP</Badge></TableCell>
+          <TableCell className="font-bold">{result.score} / {result.totalQuestions}</TableCell>
+          <TableCell className="text-center text-muted-foreground font-mono text-xs">{formatTime(result.timeTaken)}</TableCell>
+          <TableCell className="text-right text-muted-foreground text-xs">{format(new Date(result.submissionDateTime.seconds * 1000), 'MMM dd, yyyy')}</TableCell>
+        </TableRow>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-headline text-xl">Quiz Review: {quizName}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="flex flex-col items-center p-3 bg-secondary rounded-lg">
+            <span className="text-2xl font-bold">{result.score} / {result.totalQuestions}</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-widest">Score</span>
+          </div>
+          <div className="flex flex-col items-center p-3 bg-secondary rounded-lg">
+            <span className="text-2xl font-bold text-amber-500">+{result.xpGained} XP</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-widest">Experience</span>
+          </div>
+        </div>
+        {result.accuracy && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm"><span>Accuracy</span><span>{result.accuracy}%</span></div>
+            <Progress value={parseFloat(result.accuracy)} />
+          </div>
+        )}
+        <div className="text-center text-sm text-muted-foreground pt-4">
+          Full question review coming soon.
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
+// Main Component
 
 export default function ProfileClientView({ userId: profileUserIdProp }: { userId: string | null }) {
   const { user: currentUser, isUserLoading: isAuthLoading } = useUser();
   const firestore = useFirestore();
-
-  const profileUserId = useMemo(() => {
-    // Only return a definitive user ID when it's available, preventing renders with null/undefined.
-    if (profileUserIdProp) return profileUserIdProp;
-    if (currentUser) return currentUser.uid;
-    return null;
-  }, [profileUserIdProp, currentUser]);
-
-
-  const isOwnProfile = useMemo(() => {
-    if (!profileUserId || !currentUser) return false;
-    return profileUserId === currentUser.uid;
-  }, [profileUserId, currentUser]);
-
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [bioText, setBioText] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const profileUserId = useMemo(() => profileUserIdProp || (currentUser ? currentUser.uid : null), [profileUserIdProp, currentUser]);
+  const isOwnProfile = currentUser?.uid === profileUserId;
+
+  // Refs
   const userProfileRef = useMemoFirebase(
     () => (firestore && profileUserId ? doc(firestore, 'users', profileUserId) as DocumentReference<UserProfile> : null),
     [firestore, profileUserId]
   );
+
+  // Data Fetching
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
   const followersRef = useMemoFirebase(() => (firestore && profileUserId) ? collection(firestore, 'users', profileUserId, 'followers') : null, [firestore, profileUserId]);
   const followingRef = useMemoFirebase(() => (firestore && profileUserId) ? collection(firestore, 'users', profileUserId, 'following') : null, [firestore, profileUserId]);
-  
+
   const { data: followers, isLoading: areFollowersLoading } = useCollection<Follow>(followersRef);
   const { data: following, isLoading: areFollowingLoading } = useCollection<Follow>(followingRef);
 
@@ -151,182 +255,281 @@ export default function ProfileClientView({ userId: profileUserIdProp }: { userI
   const { data: isFollowingData, isLoading: isFollowingLoading } = useDoc(currentUserFollowingRef);
   const isFollowing = !!isFollowingData;
 
-
   const resultsQuery = useMemoFirebase(() => {
     if (!firestore || !profileUserId) return null;
     return query(collection(firestore, 'users', profileUserId, 'studentQuizResults'), orderBy('submissionDateTime', 'desc'));
   }, [firestore, profileUserId]);
 
   const { data: quizHistory, isLoading: isHistoryLoading } = useCollection<StudentQuizResult>(resultsQuery);
-  
-  useEffect(() => {
-    if (userProfile?.bio) {
-        setBioText(userProfile.bio);
-    }
-  }, [userProfile?.bio])
 
+  // Sync Bio
+  useEffect(() => {
+    if (userProfile?.bio) setBioText(userProfile.bio);
+  }, [userProfile?.bio]);
+
+  // Actions
   const handleSaveBio = () => {
     if (isOwnProfile && userProfileRef) {
-        updateDocumentNonBlocking(userProfileRef, { bio: bioText });
-        setIsEditingBio(false);
+      updateDocumentNonBlocking(userProfileRef, { bio: bioText });
+      setIsEditingBio(false);
     }
-  }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userProfileRef) return;
+
+    // Size Limit Check (100KB to be safe)
+    if (file.size > 100 * 1024) {
+      alert("Image too large! Please choose an image under 100KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      // Update firestore
+      updateDocumentNonBlocking(userProfileRef, { photoURL: base64String });
+      setUploadingPhoto(false);
+    };
+    setUploadingPhoto(true);
+    reader.readAsDataURL(file);
+  };
 
   const handleFollow = async () => {
     if (!currentUser || !profileUserId || !firestore || isOwnProfile) return;
 
     const batch = writeBatch(firestore);
-    
+
     const followingDocRef = doc(firestore, 'users', currentUser.uid, 'following', profileUserId);
-    batch.set(followingDocRef, { userId: profileUserId, followedAt: serverTimestamp() });
-    
+    batch.set(followingDocRef, {
+      userId: profileUserId,
+      followedAt: serverTimestamp(),
+      // Store metadata optimistically
+      name: userProfile?.name || ''
+    });
+
     const followerDocRef = doc(firestore, 'users', profileUserId, 'followers', currentUser.uid);
-    batch.set(followerDocRef, { userId: currentUser.uid, followedAt: serverTimestamp() });
+    batch.set(followerDocRef, {
+      userId: currentUser.uid,
+      followedAt: serverTimestamp(),
+      name: currentUser.displayName || ''
+    });
 
     await batch.commit();
   };
 
   const handleUnfollow = async () => {
-      if (!currentUser || !profileUserId || !firestore || isOwnProfile) return;
-
-      const batch = writeBatch(firestore);
-
-      const followingDocRef = doc(firestore, 'users', currentUser.uid, 'following', profileUserId);
-      batch.delete(followingDocRef);
-
-      const followerDocRef = doc(firestore, 'users', profileUserId, 'followers', currentUser.uid);
-      batch.delete(followerDocRef);
-      
-      await batch.commit();
+    if (!currentUser || !profileUserId || !firestore || isOwnProfile) return;
+    const batch = writeBatch(firestore);
+    const followingDocRef = doc(firestore, 'users', currentUser.uid, 'following', profileUserId);
+    batch.delete(followingDocRef);
+    const followerDocRef = doc(firestore, 'users', profileUserId, 'followers', currentUser.uid);
+    batch.delete(followerDocRef);
+    await batch.commit();
   };
-  
-  const isLoading = isAuthLoading || !profileUserId || isProfileLoading || areFollowersLoading || areFollowingLoading || isHistoryLoading;
 
-  if (isLoading) {
-      return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-  }
-  
-  if (!userProfile) {
-    return <div className="flex h-full w-full items-center justify-center">User profile not found.</div>;
-  }
-  
-  const totalQuizzes = quizHistory?.length || 0;
-  const totalXp = userProfile?.totalXp || 0;
+  if (isProfileLoading || !userProfile) return <div className="flex h-full w-full items-center justify-center min-h-[500px]"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+  // Computed Stats
+  const totalXp = userProfile.totalXp || 0;
   const { level, xpToNextLevel, progressPercentage, xpForNextLevel } = calculateLevel(totalXp);
+  const rank = getRank(level);
 
+  // Real Achievements logic
+  const achievements = [
+    {
+      id: 'first_step', label: 'First Step', desc: 'Completed your first quiz.', Icon: Rocket,
+      unlocked: (quizHistory?.length || 0) >= 1
+    },
+    {
+      id: 'quiz_master', label: 'Quiz Master', desc: 'Completed 5+ quizzes.', Icon: Crown,
+      unlocked: (quizHistory?.length || 0) >= 5
+    },
+    {
+      id: 'perfectionist', label: 'Perfectionist', desc: 'Got a 100% score.', Icon: Target,
+      unlocked: quizHistory?.some(q => q.score === q.totalQuestions) || false
+    },
+    {
+      id: 'veteran', label: 'Veteran', desc: 'Reached Level 10.', Icon: Medal,
+      unlocked: level >= 10
+    }
+  ];
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-8">
-        <Card className="overflow-hidden">
-            <CardHeader className="p-0"><div className="bg-gradient-to-r from-primary to-accent h-2" /></CardHeader>
-            <CardContent className="p-6">
-                <div className="flex items-center gap-6">
-                    <div className="relative">
-                        <div className="absolute -top-2 -left-2 bg-background rounded-full p-1">
-                            <div className="flex items-center justify-center h-16 w-16 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-lg"><Star className="h-8 w-8 fill-current" /></div>
-                        </div>
-                         <div className="flex items-center justify-center h-20 w-20 rounded-full border-4 border-amber-400 font-bold text-2xl bg-background ml-1 mt-1">{level}</div>
-                    </div>
-                    <div className="flex-1 space-y-2">
-                        <div className="flex justify-between items-baseline">
-                            <CardTitle className="font-headline text-2xl">Level {level}</CardTitle>
-                            <p className="text-sm font-mono text-muted-foreground">{totalXp} / {xpForNextLevel} XP</p>
-                        </div>
-                        <Progress value={progressPercentage} className="h-5 bg-muted border border-primary/20 shadow-inner" />
-                        <p className="text-xs text-muted-foreground text-center pt-1">{xpToNextLevel} XP to next level</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+    <div className="flex-1 max-w-5xl mx-auto p-4 md:p-8 space-y-8">
 
-      <Card>
-        <CardHeader className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-          <Avatar className="h-28 w-28 border-4 border-primary">
-            <AvatarImage src={`https://picsum.photos/seed/${userProfile!.name}/120/120`}/>
-            <AvatarFallback className="text-4xl">{userProfile!.name.charAt(0).toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <div className="space-y-4 flex-1">
-            <div className='flex items-center gap-4 justify-center md:justify-start'>
-                <CardTitle className="text-3xl font-headline">{userProfile!.name}</CardTitle>
-                {!isOwnProfile && !isFollowingLoading && (
-                    isFollowing ? (
-                        <Button variant="secondary" onClick={handleUnfollow}><UserCheck className="mr-2" /> Following</Button>
-                    ) : (
-                        <Button onClick={handleFollow}><UserPlus className="mr-2" /> Follow</Button>
-                    )
-                )}
-                 {isOwnProfile && <Button variant="outline" size="icon"><Settings /></Button>}
-            </div>
-            <div className="flex justify-center md:justify-start gap-6 text-center">
-              <div><p className="text-xl font-bold">{totalQuizzes}</p><p className="text-sm text-muted-foreground">Quizzes</p></div>
-              <div><p className="text-xl font-bold">{followers?.length || 0}</p><p className="text-sm text-muted-foreground">Followers</p></div>
-              <div><p className="text-xl font-bold">{following?.length || 0}</p><p className="text-sm text-muted-foreground">Following</p></div>
-            </div>
-             <div className="text-left">
-                {isEditingBio ? (
-                    <div className='space-y-2'>
-                        <Textarea value={bioText} onChange={(e) => setBioText(e.target.value)} placeholder="Tell us about yourself..." />
-                        <div className='flex gap-2'>
-                            <Button size="sm" onClick={handleSaveBio}><Check className='h-4 w-4 mr-1' /> Save</Button>
-                            <Button size="sm" variant="ghost" onClick={() => setIsEditingBio(false)}>Cancel</Button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className='flex items-start gap-2'>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap flex-1">{userProfile!.bio || (isOwnProfile && 'No bio yet. Add one!')}</p>
-                        {isOwnProfile && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditingBio(true)}><Edit className='h-4 w-4'/></Button>}
-                    </div>
-                )}
+      {/* Header Card */}
+      <Card className="overflow-hidden border-none shadow-xl bg-gradient-to-br from-card to-background">
+        {/* Banner */}
+        <div className="h-32 bg-gradient-to-r from-primary via-indigo-500 to-purple-600 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+        </div>
+
+        <CardContent className="relative px-8 pb-8 pt-0 flex flex-col md:flex-row gap-6 items-center md:items-end -mt-12">
+          {/* Profile Photo */}
+          <div className="relative group">
+            <Avatar className="h-32 w-32 border-4 border-background shadow-2xl">
+              <AvatarImage src={userProfile.photoURL || `https://picsum.photos/seed/${userProfile.name}/200/200`} className="object-cover" />
+              <AvatarFallback className="text-4xl bg-secondary">{userProfile.name.charAt(0).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            {isOwnProfile && (
+              <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                <Camera className="text-white h-8 w-8" />
+              </div>
+            )}
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+          </div>
+
+          {/* Basic Info */}
+          <div className="flex-1 text-center md:text-left space-y-1">
+            <h1 className="text-3xl md:text-4xl font-extrabold font-headline">{userProfile.name}</h1>
+            <p className="text-muted-foreground font-medium">@{userProfile.username || 'user'}</p>
+
+            {!isOwnProfile && (
+              <div className="pt-2">
+                <Button
+                  size="sm"
+                  className={isFollowing ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : ""}
+                  onClick={isFollowing ? handleUnfollow : handleFollow}
+                >
+                  {isFollowing ? <><UserCheck className="mr-2 h-4 w-4" /> Following</> : <><UserPlus className="mr-2 h-4 w-4" /> Follow</>}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Social Stats */}
+          <div className="flex gap-4 bg-muted/30 p-2 rounded-xl border border-white/5 backdrop-blur-sm">
+            <FollowListDialog title="Followers" triggerCount={followers?.length || 0} userIds={followers?.map(f => f.userId) || []} />
+            <div className="w-[1px] bg-border my-2"></div>
+            <FollowListDialog title="Following" triggerCount={following?.length || 0} userIds={following?.map(f => f.userId) || []} />
+            <div className="w-[1px] bg-border my-2"></div>
+            <div className="p-2 text-center min-w-[3rem]">
+              <p className="text-xl font-bold">{quizHistory?.length || 0}</p>
+              <p className="text-sm text-muted-foreground">Quizzes</p>
             </div>
           </div>
-        </CardHeader>
-      </Card>
-
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Achievements</CardTitle>
-          <CardDescription>Badges you've earned on your learning adventure. (Coming soon!)</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {mockAchievements.map(ach => (
-            <div key={ach.id} className={`flex flex-col items-center text-center p-4 rounded-lg border transition-opacity ${ach.unlocked ? 'opacity-100' : 'opacity-40'}`}>
-              <ach.Icon className={`h-12 w-12 mb-2 ${ach.unlocked ? 'text-primary' : 'text-muted-foreground'}`}/>
-              <p className="font-semibold text-sm">{ach.name}</p>
-              <p className="text-xs text-muted-foreground">{ach.description}</p>
-            </div>
-          ))}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Quiz History</CardTitle>
-          <CardDescription>A log of {isOwnProfile ? 'your' : `${userProfile!.name}'s`} recent assessments.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Quiz</TableHead>
-                 <TableHead>XP Gained</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead className="text-center">Time Taken</TableHead>
-                <TableHead className="text-right">Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isHistoryLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-              ) : quizHistory && quizHistory.length > 0 ? (
-                quizHistory.map(result => (<QuizHistoryRow key={result.id} result={result} />))
-              ) : (
-                <TableRow><TableCell colSpan={5} className="text-center">No quiz history yet.</TableCell></TableRow>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        {/* Left Col: Stats & Bio */}
+        <div className="space-y-6">
+          {/* Level Card */}
+          <Card className="bg-gradient-to-br from-background to-secondary/10 border-primary/20 shadow-md">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center gap-2"><Trophy className="text-amber-400 fill-current" /> Level {level}</CardTitle>
+                <Badge variant="outline" className={`${rank.color} border-current/30`}>{rank.name}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs font-mono text-muted-foreground">
+                  <span>{totalXp} XP</span>
+                  <span>{xpForNextLevel} XP</span>
+                </div>
+                <Progress value={progressPercentage} className="h-3" />
+                <p className="text-xs text-center text-muted-foreground pt-1">{xpToNextLevel} XP to next rank</p>
+              </div>
+
+              <div className="pt-4 border-t">
+                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2"><Crown className="h-4 w-4 text-purple-500" /> Rank Journey</h4>
+                <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar">
+                  {RANKS.map((r) => (
+                    <div key={r.name} className={`flex items-center justify-between text-xs p-2 rounded ${level >= r.minLevel ? 'bg-primary/10 text-foreground' : 'text-muted-foreground opacity-50'}`}>
+                      <span className="font-medium">{r.name}</span>
+                      <span>Lv {r.minLevel}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bio Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg">About</CardTitle>
+              {isOwnProfile && !isEditingBio && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingBio(true)}><Edit className="h-4 w-4" /></Button>
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent>
+              {isEditingBio ? (
+                <div className='space-y-2'>
+                  <Textarea value={bioText} onChange={(e) => setBioText(e.target.value)} placeholder="Tell the world about your mission..." className="min-h-[100px]" />
+                  <div className='flex gap-2 justify-end'>
+                    <Button size="sm" variant="outline" onClick={() => setIsEditingBio(false)}>Cancel</Button>
+                    <Button size="sm" onClick={handleSaveBio}>Save</Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">{userProfile.bio || "No bio added yet."}</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Col: Achievements & History */}
+        <div className="md:col-span-2 space-y-6">
+
+          {/* Achievements */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Award className="text-primary" /> Achievements</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {achievements.map(ach => (
+                <AchievementBadge key={ach.id} {...ach} />
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Quiz History */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Zap className="text-yellow-500 fill-current" /> Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Quiz</TableHead>
+                    <TableHead>XP</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead className="text-center">Time</TableHead>
+                    <TableHead className="text-right">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quizHistory && quizHistory.length > 0 ? (
+                    quizHistory.map(result => (<QuizHistoryRow key={result.id} result={result} />))
+                  ) : (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No quizzes taken yet. Go to Library to start!</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
+
+// Utility styling for scrollbar
+/* 
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888; 
+  border-radius: 2px;
+}
+*/
