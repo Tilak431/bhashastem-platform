@@ -145,7 +145,11 @@ export default function QuizClientView({ quizId }: { quizId: string }) {
       )}
 
       {userType === 'teacher' ? (
-        <TeacherView questions={questions || []} questionsCollection={questionsCollection} />
+        <TeacherView
+          questions={questions || []}
+          questionsCollection={questionsCollection}
+          quizRef={quizRef}
+        />
       ) : (
         <StudentView quizId={quizId} questions={questions} />
       )}
@@ -208,19 +212,22 @@ function EditableQuizHeader({
 function TeacherView({
   questions,
   questionsCollection,
+  quizRef,
 }: {
   questions: (Omit<Question, 'answers'> & { ref: DocumentReference })[];
   questionsCollection: any;
+  quizRef: DocumentReference | null;
 }) {
   const router = useRouter();
 
   const handleAddQuestion = () => {
-    if (!questionsCollection) return;
+    if (!questionsCollection || !quizRef) return;
     addDocumentNonBlocking(questionsCollection, {
       text: 'New Question',
       correctAnswerId: null,
       createdAt: serverTimestamp(),
     });
+    updateDocumentNonBlocking(quizRef, { questionCount: increment(1) });
   };
 
   const handleSaveChanges = () => {
@@ -232,7 +239,12 @@ function TeacherView({
     <div className="space-y-6">
       {questions.map(
         (q: Omit<Question, 'answers'> & { ref: DocumentReference }, index: number) => (
-          <EditableQuestion key={q.id} question={q} index={index} />
+          <EditableQuestion
+            key={q.id}
+            question={q}
+            index={index}
+            quizRef={quizRef}
+          />
         )
       )}
       <div className="flex gap-4 border-t pt-6">
@@ -250,9 +262,11 @@ function TeacherView({
 function EditableQuestion({
   question,
   index,
+  quizRef,
 }: {
   question: Omit<Question, 'answers'> & { ref: DocumentReference };
   index: number;
+  quizRef: DocumentReference | null;
 }) {
   const [questionText, setQuestionText] = useState(question.text || '');
 
@@ -270,6 +284,9 @@ function EditableQuestion({
       });
     });
     deleteDocumentNonBlocking(question.ref);
+    if (quizRef) {
+      updateDocumentNonBlocking(quizRef, { questionCount: increment(-1) });
+    }
   };
 
   return (
