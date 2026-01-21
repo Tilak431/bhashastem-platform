@@ -941,7 +941,7 @@ function ResourceCard({
           )}
 
           <div className="absolute top-3 right-3 flex gap-2">
-            <Badge variant="secondary" className="backdrop-blur-md bg-white/90 shadow-sm gap-1">
+            <Badge variant="secondary" className="backdrop-blur-md bg-black/60 text-white hover:bg-black/70 border border-white/10 shadow-sm gap-1">
               <SubjectIcon className="h-3 w-3" />
               {resource.subject}
             </Badge>
