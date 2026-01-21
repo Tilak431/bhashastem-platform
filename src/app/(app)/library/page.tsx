@@ -1046,33 +1046,27 @@ export default function LibraryPage() {
   const firestore = useFirestore();
   const [userType, setUserType] = useState<'student' | 'teacher' | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState<Subject | 'all'>(
-    'all'
-  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState<Subject | 'all'>('all');
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
-  const [selectedResource, setSelectedResource] =
-    useState<WithId<Resource> | null>(null);
-  const [playingDubSegments, setPlayingDubSegments] = useState<DubSegment[] | undefined>(
-    undefined
-  );
+  const [selectedResource, setSelectedResource] = useState<WithId<Resource> | null>(null);
+  const [playingDubSegments, setPlayingDubSegments] = useState<DubSegment[] | undefined>(undefined);
 
   useEffect(() => {
-    const type = localStorage.getItem('userType') as
-      | 'student'
-      | 'teacher'
-      | null;
+    const type = localStorage.getItem('userType') as 'student' | 'teacher' | null;
     setUserType(type);
   }, []);
 
   const resourcesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     const resourcesCollection = collection(firestore, 'resources');
+    // We fetch ALL if searching, or filter by subject. Client-side filtering for search is easiest for small sets.
+    // If strict on subject:
     const baseQuery =
       selectedSubject !== 'all'
         ? query(resourcesCollection, where('subject', '==', selectedSubject))
         : query(resourcesCollection);
 
-    // Don't add orderBy if filtering, to avoid needing a composite index
     return selectedSubject === 'all'
       ? query(baseQuery, orderBy('createdAt', 'desc'))
       : baseQuery;
@@ -1083,13 +1077,25 @@ export default function LibraryPage() {
 
   const resources = useMemo(() => {
     if (!rawResources) return null;
-    if (selectedSubject !== 'all' && rawResources.length > 0) {
-      return [...rawResources].sort(
+    let filtered = [...rawResources];
+
+    // Filter by Search Query
+    if (searchQuery.trim()) {
+      const lowerQ = searchQuery.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.title.toLowerCase().includes(lowerQ) ||
+        r.description.toLowerCase().includes(lowerQ) ||
+        r.subject.toLowerCase().includes(lowerQ)
+      );
+    }
+
+    if (selectedSubject !== 'all' && filtered.length > 0) {
+      return filtered.sort(
         (a, b) => b.createdAt.seconds - a.createdAt.seconds
       );
     }
-    return rawResources;
-  }, [rawResources, selectedSubject]);
+    return filtered;
+  }, [rawResources, selectedSubject, searchQuery]);
 
   const handlePlay = (resource: WithId<Resource>) => {
     setSelectedResource(resource);
@@ -1179,7 +1185,8 @@ export default function LibraryPage() {
             <Input
               placeholder="Search topics..."
               className="pl-9 h-9 rounded-full bg-background border-muted hover:border-primary/50 transition-colors"
-              disabled
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>

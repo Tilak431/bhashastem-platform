@@ -19,6 +19,9 @@ import {
   Star,
   Rss,
   Search,
+  Target,
+  Zap,
+  Trophy,
 } from 'lucide-react';
 import {
   Card,
@@ -38,7 +41,7 @@ import { collection, query, orderBy, doc } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 
 const quickActions = [
-    {
+  {
     title: 'Browse Library',
     description: 'Explore videos, articles, and simulations.',
     href: '/library',
@@ -71,33 +74,44 @@ const quickActions = [
 ];
 
 interface StudentQuizResult {
-    id: string;
-    quizId: string;
-    score: number;
-    totalQuestions: number;
-    submissionDateTime: { seconds: number; nanoseconds: number };
-    timeTaken: number;
-    xpGained: number;
+  id: string;
+  quizId: string;
+  score: number;
+  totalQuestions: number;
+  submissionDateTime: { seconds: number; nanoseconds: number };
+  timeTaken: number;
+  xpGained: number;
 }
 
 interface UserProfile {
-    name: string;
-    totalXp: number;
-    bio: string;
+  name: string;
+  totalXp: number;
+  bio: string;
 }
 
 const XP_PER_LEVEL = 100;
 
 function calculateLevel(totalXp: number) {
-    if (totalXp < 0) totalXp = 0;
-    const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
-    const xpForCurrentLevel = (level - 1) * XP_PER_LEVEL;
-    const xpForNextLevel = level * XP_PER_LEVEL;
-    const xpProgress = totalXp - xpForCurrentLevel;
-    const xpToNextLevel = xpForNextLevel - totalXp;
-    const progressPercentage = (xpProgress / XP_PER_LEVEL) * 100;
-    
-    return { level, xpProgress, xpToNextLevel, progressPercentage, xpForNextLevel };
+  if (totalXp < 0) totalXp = 0;
+  const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
+  const xpForCurrentLevel = (level - 1) * XP_PER_LEVEL;
+  const xpForNextLevel = level * XP_PER_LEVEL;
+  const xpProgress = totalXp - xpForCurrentLevel;
+  const xpToNextLevel = xpForNextLevel - totalXp;
+  const progressPercentage = (xpProgress / XP_PER_LEVEL) * 100;
+
+  return { level, xpProgress, xpToNextLevel, progressPercentage, xpForNextLevel };
+}
+
+const RANKS = [
+  { name: 'Spark Novice', minLevel: 1, color: 'text-amber-600 border-amber-600' },
+  { name: 'Fusion Apprentice', minLevel: 5, color: 'text-cyan-500 border-cyan-500' },
+  { name: 'Quantum Adept', minLevel: 10, color: 'text-purple-500 border-purple-500' },
+  { name: 'Cosmos Master', minLevel: 20, color: 'text-rose-500 border-rose-500' },
+];
+
+function getRank(level: number) {
+  return RANKS.slice().reverse().find(r => level >= r.minLevel) || RANKS[0];
 }
 
 
@@ -109,11 +123,11 @@ function processProgressData(quizHistory: StudentQuizResult[] | null) {
   quizHistory.forEach(result => {
     const date = new Date(result.submissionDateTime.seconds * 1000);
     const month = date.toLocaleString('default', { month: 'short' });
-    
+
     if (!monthlyData[month]) {
       monthlyData[month] = { quizzesCompleted: 0, xpGained: 0 };
     }
-    
+
     monthlyData[month].quizzesCompleted += 1;
     monthlyData[month].xpGained += result.xpGained;
   });
@@ -163,108 +177,146 @@ export default function DashboardPage() {
         </h2>
       </div>
 
-       <Card className="overflow-hidden">
-            <CardHeader className="p-0"><div className="bg-gradient-to-r from-primary to-accent h-2" /></CardHeader>
-            <CardContent className="p-6">
-                 {isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : (
-                    <div className="flex items-center gap-6">
-                        <div className="relative">
-                            <div className="absolute -top-2 -left-2 bg-background rounded-full p-1">
-                                <div className="flex items-center justify-center h-16 w-16 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-lg"><Star className="h-8 w-8 fill-current" /></div>
-                            </div>
-                            <div className="flex items-center justify-center h-20 w-20 rounded-full border-4 border-amber-400 font-bold text-2xl bg-background ml-1 mt-1">{level}</div>
-                        </div>
-                        <div className="flex-1 space-y-2">
-                            <div className="flex justify-between items-baseline">
-                                <CardTitle className="font-headline text-2xl">Level {level}</CardTitle>
-                                <p className="text-sm font-mono text-muted-foreground">{totalXp} / {xpForNextLevel} XP</p>
-                            </div>
-                            <Progress value={progressPercentage} className="h-5 bg-muted border border-primary/20 shadow-inner" />
-                            <p className="text-xs text-muted-foreground text-center pt-1">{xpToNextLevel} XP to next level</p>
-                        </div>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {quickActions.map(action => (
-          <Card
-            key={action.title}
-            className="hover:shadow-lg transition-shadow duration-300"
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-medium font-headline">
-                {action.title}
-              </CardTitle>
-              <action.icon className="h-6 w-6 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {action.description}
-              </p>
-              <Button asChild variant="link" className="px-0 mt-2">
-                <Link href={action.href}>
-                  Go to section <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Progress Overview</CardTitle>
-          <CardDescription>
-            Your learning journey over the past 6 months.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pl-2">
-           {isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : (
-          <ChartContainer
-            config={{
-              xpGained: {
-                label: 'XP Gained',
-                color: 'hsl(var(--primary))',
-              },
-              quizzesCompleted: {
-                label: 'Quizzes Completed',
-                color: 'hsl(var(--accent))',
-              },
-            }}
-            className="h-[300px] w-full"
-          >
-            <ResponsiveContainer>
-              <BarChart data={progressData}>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                />
-                <YAxis />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent />}
-                />
-                <Bar
-                  dataKey="xpGained"
-                  fill="var(--color-xpGained)"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="quizzesCompleted"
-                  fill="var(--color-quizzesCompleted)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
+      <Card className="overflow-hidden">
+        <CardHeader className="p-0"><div className="bg-gradient-to-r from-primary to-accent h-2" /></CardHeader>
+        <CardContent className="p-6">
+          {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="absolute -top-2 -left-2 bg-background rounded-full p-1">
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-lg"><Star className="h-8 w-8 fill-current" /></div>
+                </div>
+                <div className="flex items-center justify-center h-20 w-20 rounded-full border-4 border-amber-400 font-bold text-2xl bg-background ml-1 mt-1">{level}</div>
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex justify-between items-baseline">
+                  <CardTitle className="font-headline text-2xl">Level {level}</CardTitle>
+                  <p className="text-sm font-mono text-muted-foreground">{totalXp} / {xpForNextLevel} XP</p>
+                </div>
+                <Progress value={progressPercentage} className="h-5 bg-muted border border-primary/20 shadow-inner" />
+                <p className="text-xs text-muted-foreground text-center pt-1">{xpToNextLevel} XP to next level</p>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Average Accuracy</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {quizHistory && quizHistory.length > 0
+                ? (quizHistory.reduce((acc, q) => acc + (q.score / q.totalQuestions), 0) / quizHistory.length * 100).toFixed(1)
+                : 0}%
+            </div>
+            <p className="text-xs text-muted-foreground">Based on {quizHistory?.length || 0} quizzes</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total XP Earned</CardTitle>
+            <Zap className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalXp.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">+ from last week</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Quizzes Completed</CardTitle>
+            <Library className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{quizHistory?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">Lifetime total</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Current Rank</CardTitle>
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{getRank(level).name}</div>
+            <p className="text-xs text-muted-foreground">Level {level}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle className="font-headline">Activity Overview</CardTitle>
+            <CardDescription>
+              Your learning consistency over time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pl-2">
+            {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+              <ChartContainer
+                config={{
+                  xpGained: {
+                    label: 'XP Gained',
+                    color: 'hsl(var(--primary))',
+                  },
+                  quizzesCompleted: {
+                    label: 'Quizzes Completed',
+                    color: 'hsl(var(--secondary))',
+                  },
+                }}
+                className="h-[300px] w-full"
+              >
+                <ResponsiveContainer>
+                  <BarChart data={progressData}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      tickMargin={10}
+                      axisLine={false}
+                    />
+                    <YAxis axisLine={false} tickLine={false} />
+                    <ChartTooltip
+                      cursor={{ fill: 'transparent' }}
+                      content={<ChartTooltipContent indicator="dashed" />}
+                    />
+                    <Bar
+                      dataKey="xpGained"
+                      fill="var(--color-xpGained)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions (Moved here for better layout) */}
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle>Quick Access</CardTitle>
+            <CardDescription>Jump back into learning.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {quickActions.slice(0, 3).map(action => (
+              <Link href={action.href} key={action.title} className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted transition-colors border">
+                <div className="bg-primary/10 p-2 rounded-full"><action.icon className="h-4 w-4 text-primary" /></div>
+                <div>
+                  <p className="font-medium text-sm">{action.title}</p>
+                  <p className="text-xs text-muted-foreground">{action.description}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

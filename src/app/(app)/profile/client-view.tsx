@@ -106,13 +106,29 @@ function FollowListDialog({
   triggerCount: number,
   userIds: string[]
 }) {
-  // Note: In a real app, we should fetch users in batch or store names.
-  // Here we show IDs or placeholder if name not cached.
-  // For simplicity in this demo, we'll list IDs as "User"
-  // Ideally, we fetching user profiles for these IDs.
+  const firestore = useFirestore();
+  const [users, setUsers] = useState<{ id: string, name: string }[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !firestore || !userIds.length) return;
+
+    const fetchUsers = async () => {
+      try {
+        const fetched = await Promise.all(userIds.map(async (uid) => {
+          const docRef = doc(firestore, 'users', uid);
+          const snap = await getDoc(docRef);
+          // Fallback to "Unknown" if user deleted, or use UID if name missing
+          return { id: uid, name: snap.exists() ? (snap.data().name || 'No Name') : 'Deleted User' };
+        }));
+        setUsers(fetched);
+      } catch (e) { console.error(e); }
+    };
+    fetchUsers();
+  }, [isOpen, userIds, firestore]);
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <div className="cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors text-center">
           <p className="text-xl font-bold">{triggerCount}</p>
@@ -124,16 +140,17 @@ function FollowListDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="max-h-[300px] overflow-y-auto space-y-2">
-          {userIds.length === 0 ? <p className="text-muted-foreground text-center py-4">No {title.toLowerCase()} yet.</p> : userIds.map((uid) => (
-            <div key={uid} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={`https://picsum.photos/seed/${uid}/40/40`} />
-                <AvatarFallback>U</AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium">User {uid.slice(0, 5)}...</span>
-              {/* Real implementation needs fetch */}
-            </div>
-          ))}
+          {userIds.length === 0 ? <p className="text-muted-foreground text-center py-4">No {title.toLowerCase()} yet.</p> : (
+            users.length > 0 ? users.map((u) => (
+              <div key={u.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={`https://picsum.photos/seed/${u.id}/40/40`} />
+                  <AvatarFallback>{u.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium">{u.name}</span>
+              </div>
+            )) : <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -396,6 +413,22 @@ export default function ProfileClientView({ userId: profileUserIdProp }: { userI
     }
   ];
 
+  // Admin: Clear Posts
+  const handleClearPosts = async () => {
+    if (userProfile?.username !== 'tilak_041' || !firestore) return;
+    if (!window.confirm("CONFIRM: Delete ALL posts in the system? Users will remain.")) return;
+
+    try {
+      const postsRef = collection(firestore, 'posts');
+      const snapshot = await getDocs(postsRef);
+      const batch = writeBatch(firestore);
+      snapshot.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      alert(`Deleted ${snapshot.size} posts.`);
+      window.location.reload();
+    } catch (e) { console.error(e); alert("Failed."); }
+  }
+
   return (
     <div className="flex-1 max-w-5xl mx-auto p-4 md:p-8 space-y-8">
 
@@ -559,10 +592,16 @@ export default function ProfileClientView({ userId: profileUserIdProp }: { userI
 
       {/* Admin Zone */}
       {userProfile.username === 'tilak_041' && isOwnProfile && (
-        <div className="flex justify-center pt-8 border-t w-full">
-          <Button variant="destructive" onClick={handleAdminCleanup}>
-            ⚠️ Admin: Remove All Other Accounts
-          </Button>
+        <div className="flex flex-col gap-3 items-center pt-8 border-t w-full">
+          <h3 className="text-sm font-bold uppercase text-muted-foreground">Admin Danger Zone</h3>
+          <div className="flex gap-4">
+            <Button variant="outline" className="border-destructive text-destructive" onClick={handleClearPosts}>
+              🗑️ Clear All Posts
+            </Button>
+            <Button variant="destructive" onClick={handleAdminCleanup}>
+              ⚠️ Wipe Users & Posts
+            </Button>
+          </div>
         </div>
       )}
     </div>
