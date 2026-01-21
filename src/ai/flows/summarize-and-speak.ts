@@ -1,5 +1,4 @@
 'use server';
-export const maxDuration = 60; // Set timeout to 60 seconds
 /**
  * @fileOverview A flow that summarizes text, translates it, and generates audio for the translation.
  *
