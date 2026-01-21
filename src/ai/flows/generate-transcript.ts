@@ -35,8 +35,18 @@ const generateTranscriptFlow = ai.defineFlow(
                 { media: { url: fileUrl } },
                 {
                     text: `You are an expert transcriber and translator. 
-please transcribe the speech from this video and translate it directly into ${targetLanguage}.
-Divide the speech into logical sentence-level segments.
+                    
+TASK:
+1. Transcribe the speech from the video.
+2. Translate the speech into ${targetLanguage}.
+3. Divide the translated speech into logical sentence-level segments.
+
+OUTPUT RULES:
+- The "text" field MUST be in ${targetLanguage}.
+- If the original audio is in English, you MUST translate it to ${targetLanguage}.
+- Do NOT return English text unless the target language is English.
+- Use the correct script for the target language (e.g., Devanagari for Hindi, Tamil script for Tamil).
+
 For each segment, provide:
 1. "start": The start timestamp in MM:SS format (e.g., "00:05").
 2. "end": The end timestamp in MM:SS format (e.g., "00:12").
