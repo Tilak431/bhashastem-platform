@@ -85,9 +85,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { generateDubbing } from '@/ai/flows/generate-dubbing';
 import { generateTranscript } from '@/ai/flows/generate-transcript';
-import { generateAudio } from '@/ai/flows/generate-audio';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';

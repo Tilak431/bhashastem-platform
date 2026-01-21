@@ -1,11 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, Sparkles, Wand2, BookOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,8 +33,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { languages } from "@/lib/data";
-import { getRecommendationsAction } from "./actions";
-import type { RecommendationState } from "./actions";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   language: z.string({ required_error: "Please select a language." }),
@@ -43,34 +41,15 @@ const formSchema = z.object({
   learningGaps: z.string().min(10, "Please describe your learning gaps."),
 });
 
-const initialState: RecommendationState = {
-  form: {
-    language: "English",
-    curriculum: "",
-    learningGaps: "",
-  },
-  status: "idle",
-  message: "",
-};
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} className="w-full">
-      {pending ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      ) : (
-        <Wand2 className="mr-2 h-4 w-4" />
-      )}
-      Generate Recommendations
-    </Button>
-  );
-}
+type FormValues = z.infer<typeof formSchema>;
 
 export default function RecommendationsPage() {
-  const [state, formAction] = useActionState(getRecommendationsAction, initialState);
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       language: "English",
@@ -78,6 +57,44 @@ export default function RecommendationsPage() {
       learningGaps: "",
     },
   });
+
+  const onSubmit = async (data: FormValues) => {
+    setIsLoading(true);
+    setError(null);
+    setRecommendations(null);
+
+    try {
+      const response = await fetch('/api/generate-recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch recommendations');
+      }
+
+      const result = await response.json();
+      setRecommendations(result.recommendations);
+
+      toast({
+        title: "Recommendations Generated",
+        description: "We've created a personalized learning plan for you.",
+      });
+    } catch (err) {
+      console.error(err);
+      setError("An error occurred while getting recommendations. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not generate recommendations. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -93,7 +110,7 @@ export default function RecommendationsPage() {
       <div className="grid gap-8 md:grid-cols-2">
         <Card>
           <Form {...form}>
-            <form action={formAction} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <CardHeader>
                 <CardTitle className="font-headline">Tell us what you need</CardTitle>
                 <CardDescription>
@@ -157,40 +174,52 @@ export default function RecommendationsPage() {
                 />
               </CardContent>
               <CardFooter>
-                <SubmitButton />
+                <Button type="submit" disabled={isLoading} className="w-full">
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-2 h-4 w-4" />
+                  )}
+                  {isLoading ? 'Generating Plan...' : 'Generate Recommendations'}
+                </Button>
               </CardFooter>
             </form>
           </Form>
         </Card>
 
-        <Card className="flex flex-col">
+        <Card className="flex flex-col min-h-[500px]">
           <CardHeader>
             <CardTitle className="font-headline">Your Recommended Resources</CardTitle>
             <CardDescription>
               Here are some resources tailored just for you.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1">
-            {state.status === "loading" && (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <CardContent className="flex-1 overflow-auto">
+            {isLoading && (
+              <div className="flex flex-col items-center justify-center h-full space-y-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground animate-pulse">Analyzing your learning profile...</p>
               </div>
             )}
-            {state.status === 'idle' && (
-              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                <Sparkles className="h-12 w-12 mb-4" />
-                <p className="text-lg">Your recommendations will appear here.</p>
-                <p>Fill out the form to get started.</p>
+            {!isLoading && !recommendations && !error && (
+              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-8">
+                <Sparkles className="h-12 w-12 mb-4 text-yellow-500/50" />
+                <p className="text-lg font-medium">Ready to assist you!</p>
+                <p className="text-sm">Fill out the form to get a personalized study plan.</p>
               </div>
             )}
-            {state.status === 'error' && state.message && (
-              <div className="flex items-center justify-center h-full text-destructive">
-                <p>{state.message}</p>
+            {!isLoading && error && (
+              <div className="flex flex-col items-center justify-center h-full text-destructive p-8 text-center">
+                <BookOpen className="h-12 w-12 mb-4 opacity-50" />
+                <p className="font-medium">{error}</p>
+                <Button variant="outline" className="mt-4" onClick={() => form.handleSubmit(onSubmit)()}>
+                  Try Again
+                </Button>
               </div>
             )}
-            {state.status === 'success' && state.recommendations && (
-              <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">
-                {state.recommendations}
+            {!isLoading && recommendations && (
+              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground whitespace-pre-wrap bg-accent/10 p-4 rounded-lg border">
+                {recommendations}
               </div>
             )}
           </CardContent>
