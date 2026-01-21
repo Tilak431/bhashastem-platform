@@ -233,47 +233,49 @@ function ResourcePlayerDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl h-auto p-0">
-        <DialogHeader className="p-4">
-          <DialogTitle>{resource.title}</DialogTitle>
-        </DialogHeader>
-        <div className="aspect-video relative group bg-black rounded-b-lg overflow-hidden">
+      <DialogContent className="max-w-5xl p-0 bg-black/95 border-zinc-800 shadow-2xl overflow-hidden">
+        <div className="relative aspect-video w-full group">
           {videoId ? (
-            <div className="flex items-center justify-center h-full text-white">
-              <p>Start Sync only supports Direct Video Uploads currently.</p>
+            <div className="flex items-center justify-center h-full text-white/50 bg-zinc-900">
+              <p>Direct Video Uploads only for Live Sync.</p>
             </div>
-            /* YouTube Sync is extremely complex to implement perfectly without custom controls overlay. 
-               For this task "fix to perfection", we focus on the uploaded videos which we control. 
-               If user uploads MP4, this works 100%. */
           ) : (
             <video
               ref={videoRef}
               src={resource.fileUrl}
-              controls={!dubSegments} // Hide default controls if dubbing active to force our logic? No, let user control.
+              controls
               autoPlay
               muted={!!dubSegments}
               onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
-              className="w-full h-full rounded-b-lg bg-black"
+              className="w-full h-full object-contain bg-black"
             />
           )}
 
-          {/* Hidden Audio Player for Dubs */}
           <audio ref={audioRef} className="hidden" />
 
+          {/* Header Overlay */}
+          <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <h3 className="text-white font-medium tracking-tight drop-shadow-md">{resource.title}</h3>
+          </div>
+
+          {/* Sync Status & Subtitles Overlay */}
           {dubSegments && (
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-black/60 backdrop-blur-sm rounded-b-lg pointer-events-none">
-              <div className="flex items-center gap-3">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <p className="text-white text-xs font-medium">
-                  Smart Sync: Real-Time Active
+            <div className="absolute bottom-8 left-0 right-0 p-6 flex flex-col items-center text-center pointer-events-none transition-all">
+              <div className="bg-black/70 backdrop-blur-md px-4 py-2 rounded-full mb-4 flex items-center gap-2 border border-white/10 shadow-xl">
+                <div className="relative h-2.5 w-2.5">
+                  <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75"></div>
+                  <div className="relative h-2.5 w-2.5 bg-green-500 rounded-full"></div>
+                </div>
+                <span className="text-green-400 text-xs font-bold tracking-wider uppercase">Real-Time Sync</span>
+              </div>
+
+              <div className="max-w-3xl">
+                <p className="text-white/95 text-lg md:text-xl font-medium leading-relaxed drop-shadow-lg p-2 rounded bg-black/40 box-decoration-clone">
+                  {processedSegments?.find(s => currentTime >= (s.startTime || 0) && currentTime < (s.endTime || 0))?.text || ""}
                 </p>
               </div>
-              {/* Optional: Show active subtitle */}
-              <p className="text-white/80 text-sm mt-1">
-                {processedSegments?.find(s => currentTime >= (s.startTime || 0) && currentTime < (s.endTime || 0))?.text || "..."}
-              </p>
             </div>
           )}
         </div>
@@ -730,10 +732,13 @@ function AiTranslationEngine({
   };
 
   return (
-    <div className="mt-4 pt-4 border-t border-dashed">
-      <Label className="text-xs font-semibold text-muted-foreground mb-2 block">
-        AI Content Engine
-      </Label>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          AI Studio Control
+        </Label>
+        {error && <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-0.5 rounded">{error}</span>}
+      </div>
 
       <Tabs
         defaultValue="transcript"
@@ -741,21 +746,21 @@ function AiTranslationEngine({
         onValueChange={setActiveTab}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="transcript">Generate Transcript</TabsTrigger>
-          <TabsTrigger value="audio">Generate Audio</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 bg-background/50 p-1 border rounded-lg">
+          <TabsTrigger value="transcript" className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Transcript</TabsTrigger>
+          <TabsTrigger value="audio" className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Audio Dub</TabsTrigger>
         </TabsList>
 
         {/* TRANSCRIPT TAB */}
-        <TabsContent value="transcript" className="space-y-3 mt-3">
-          <div className="flex items-center gap-2">
+        <TabsContent value="transcript" className="space-y-4 mt-4 origin-top animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
             <Select
               value={transLang}
               onValueChange={setTransLang}
               disabled={isTransLoading}
             >
-              <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Select Language" />
+              <SelectTrigger className="flex-1 h-10 bg-background border-input focus:ring-primary/20 transition-all">
+                <SelectValue placeholder="Target Language" />
               </SelectTrigger>
               <SelectContent>
                 {languages.map(l => (
@@ -769,6 +774,7 @@ function AiTranslationEngine({
               size="sm"
               onClick={handleGenerateTranscript}
               disabled={!transLang || isTransLoading}
+              className="h-10 px-6 font-semibold shadow-sm"
             >
               {isTransLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -779,11 +785,14 @@ function AiTranslationEngine({
           </div>
 
           {transSegments && (
-            <div className="rounded-md border p-3 bg-muted/50 text-sm h-48 overflow-y-auto space-y-2">
+            <div className="rounded-lg border bg-zinc-950 p-4 h-56 overflow-y-auto space-y-1 font-mono text-sm relative group">
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Badge variant="outline" className="text-xs text-zinc-500 border-zinc-700 bg-zinc-900">Preview</Badge>
+              </div>
               {transSegments.map((s, i) => (
-                <div key={i} className="grid grid-cols-[80px_1fr] gap-2 border-b pb-1 last:border-0 hover:bg-black/5 p-1 rounded">
-                  <span className="text-xs font-mono text-muted-foreground pt-1">{s.start} - {s.end}</span>
-                  <span>{s.text}</span>
+                <div key={i} className="grid grid-cols-[60px_1fr] gap-3 text-zinc-400 border-b border-zinc-900/50 pb-1 mb-1 last:border-0 hover:bg-zinc-900/50 hover:text-zinc-200 transition-colors rounded px-1">
+                  <span className="text-zinc-600 text-xs pt-0.5">{s.start}</span>
+                  <span className="leading-relaxed">{s.text}</span>
                 </div>
               ))}
             </div>
@@ -791,15 +800,15 @@ function AiTranslationEngine({
         </TabsContent>
 
         {/* AUDIO TAB */}
-        <TabsContent value="audio" className="space-y-3 mt-3">
-          <div className="flex items-center gap-2">
+        <TabsContent value="audio" className="space-y-4 mt-4 origin-top animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
             <Select
               value={audioLang}
               onValueChange={setAudioLang}
               disabled={isAudioLoading}
             >
-              <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Select Language" />
+              <SelectTrigger className="flex-1 h-10 bg-background border-input focus:ring-primary/20 transition-all">
+                <SelectValue placeholder="Dub Language" />
               </SelectTrigger>
               <SelectContent>
                 {languages.map(l => (
@@ -813,35 +822,35 @@ function AiTranslationEngine({
               size="sm"
               onClick={handleGenerateAudio}
               disabled={!audioLang || isAudioLoading}
+              className="h-10 px-6 font-semibold shadow-sm"
             >
               {isAudioLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                'Generate'
+                'Generate Dub'
               )}
             </Button>
           </div>
 
           {audioSegments && (
-            <div className="space-y-3">
-              <div className="rounded-md border bg-green-50/50 p-3 text-center">
-                <Sparkles className="h-5 w-5 mx-auto text-green-600 mb-1" />
-                <p className="text-sm font-medium text-green-700">Audio Generated & Synced!</p>
-                <p className="text-xs text-muted-foreground">{audioSegments.length} segments ready.</p>
+            <div className="space-y-4 pt-2">
+              <div className="rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900 p-4 text-center">
+                <div className="bg-emerald-100 dark:bg-emerald-900/50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <h4 className="text-base font-semibold text-emerald-800 dark:text-emerald-300">Sync Complete</h4>
+                <p className="text-sm text-emerald-600 dark:text-emerald-400/80 mb-1">{audioSegments.length} audio segments generated.</p>
               </div>
               <Button
-                className="w-full gap-2"
-                variant="secondary"
+                className="w-full h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all active:scale-[0.98]"
                 onClick={() => onPlayDubbed(audioSegments)}
               >
-                <PlayCircle className="h-4 w-4" /> Play Synced Video
+                <PlayCircle className="h-5 w-5 mr-2" /> Play Synced Video
               </Button>
             </div>
           )}
         </TabsContent>
       </Tabs>
-
-      {error && <p className="text-xs text-destructive mt-2">{error}</p>}
     </div>
   );
 }
@@ -861,6 +870,8 @@ function ResourceCard({
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [showAiStudio, setShowAiStudio] = useState(false);
+
   const SubjectIcon = subjectIconMap[resource.subject];
   const TypeIcon = resourceTypeIconMap[resource.type] || BookOpen;
 
@@ -893,7 +904,10 @@ function ResourceCard({
 
   return (
     <>
-      <Card className="group flex flex-col overflow-hidden hover:shadow-xl transition-shadow duration-300">
+      <div
+        className={`group relative flex flex-col bg-card rounded-xl border shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden ${showAiStudio ? 'ring-2 ring-primary/20' : ''}`}
+      >
+        {/* Thumbnail Section */}
         <div
           onClick={handleCardClick}
           className="relative aspect-video w-full overflow-hidden cursor-pointer"
@@ -905,77 +919,104 @@ function ResourceCard({
                 alt={resource.title}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                className="object-cover transition-transform group-hover:scale-105"
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
               />
-              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <PlayCircle className="h-12 w-12 text-white" />
+              <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors" />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="bg-white/90 backdrop-blur rounded-full p-3 shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+                  <PlayCircle className="h-8 w-8 text-primary" />
+                </div>
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center h-full bg-secondary">
-              <TypeIcon className="h-12 w-12 text-muted-foreground" />
+            <div className="flex items-center justify-center h-full bg-secondary/50">
+              <TypeIcon className="h-12 w-12 text-muted-foreground/50" />
             </div>
           )}
+
+          <div className="absolute top-3 right-3 flex gap-2">
+            <Badge variant="secondary" className="backdrop-blur-md bg-white/90 shadow-sm gap-1">
+              <SubjectIcon className="h-3 w-3" />
+              {resource.subject}
+            </Badge>
+          </div>
         </div>
 
-        <CardHeader className="p-4 pb-0">
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle
-              onClick={handleCardClick}
-              className="text-lg font-headline leading-tight cursor-pointer hover:underline"
-            >
-              {resource.title}
-            </CardTitle>
-            <SubjectIcon className="h-7 w-7 text-primary flex-shrink-0 mt-1" />
+        {/* Content Section */}
+        <div className="p-5 flex flex-col flex-grow relative z-10 bg-card">
+          <div className="flex justify-between items-start mb-2">
+            <div className="space-y-1">
+              <h3
+                onClick={handleCardClick}
+                className="font-semibold text-lg leading-tight cursor-pointer hover:text-primary transition-colors line-clamp-1"
+              >
+                {resource.title}
+              </h3>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <TypeIcon className="h-3 w-3" />
+                {resource.type} • English
+              </p>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-4 pt-2 flex-grow flex flex-col">
-          <CardDescription
-            onClick={handleCardClick}
-            className="text-sm cursor-pointer flex-grow"
-          >
+
+          <p className="text-sm text-muted-foreground line-clamp-2 mb-4 min-h-[2.5rem]">
             {resource.description}
-          </CardDescription>
-          <div onClick={e => e.stopPropagation()}>
+          </p>
+
+          <div className="mt-auto flex items-center justify-between pt-2 border-t border-border/50">
+            <Button
+              variant={showAiStudio ? "default" : "outline"}
+              size="sm"
+              className={`gap-2 transition-all ${showAiStudio ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-primary/5'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAiStudio(!showAiStudio);
+              }}
+            >
+              <Sparkles className={`h-3.5 w-3.5 ${showAiStudio ? 'animate-pulse' : ''}`} />
+              {showAiStudio ? 'Close Studio' : 'AI Studio'}
+            </Button>
+
+            {userType === 'teacher' && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDeleteDialogOpen(true);
+                }}
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* AI Studio Panel */}
+        <div className={`
+             overflow-hidden transition-all duration-300 ease-in-out bg-muted/30 border-t
+             ${showAiStudio ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}
+        `}>
+          <div className="p-4 pt-2">
             <AiTranslationEngine
               resource={resource}
               onPlayDubbed={segments => onPlayDubbed(resource, segments)}
             />
           </div>
-        </CardContent>
-        <CardFooter className="p-4 pt-0 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="gap-1.5 pl-1.5">
-              <TypeIcon className="h-3.5 w-3.5" /> {resource.type}
-            </Badge>
-            <Badge variant="outline">{resource.subject}</Badge>
-          </div>
-          {userType === 'teacher' && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={e => {
-                e.stopPropagation();
-                setIsDeleteDialogOpen(true);
-              }}
-              disabled={isDeleting}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
+
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Resource?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the resource "{resource.title}". This
-              action cannot be undone.
+              This will permanently delete "{resource.title}" and all associated AI generated content.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1035,7 +1076,6 @@ export default function LibraryPage() {
 
   const resources = useMemo(() => {
     if (!rawResources) return null;
-    // If we filtered, sort manually on the client
     if (selectedSubject !== 'all' && rawResources.length > 0) {
       return [...rawResources].sort(
         (a, b) => b.createdAt.seconds - a.createdAt.seconds
@@ -1063,97 +1103,107 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight font-headline">
-            Content Library
-          </h2>
-          <p className="text-muted-foreground">
-            Explore curated STEM resources uploaded by your teachers.
-          </p>
+    <div className="flex-1 min-h-screen bg-transparent space-y-8 p-6 md:p-10 pb-20">
+      {/* Header & Hero */}
+      <div className="relative">
+        <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
+
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <h2 className="text-4xl font-extrabold tracking-tight font-headline bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600">
+              Content Library
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-2xl">
+              Immersive STEM learning resources curated for your success.
+            </p>
+          </div>
+          {userType === 'teacher' && (
+            <Button
+              onClick={() => setIsCreateDialogOpen(true)}
+              className="shadow-lg hover:shadow-primary/20 transition-all rounded-full px-6"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
+            </Button>
+          )}
         </div>
-        {userType === 'teacher' && (
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
+      </div>
+
+      {/* Filter Bar */}
+      <div className="sticky top-0 z-20 -mx-6 px-6 py-4 bg-background/80 backdrop-blur-lg border-b border-border/40 flex flex-nowrap items-center gap-4 overflow-x-auto no-scrollbar mask-gradient">
+        <div className="flex items-center gap-2 p-1 bg-muted/40 rounded-full border">
+          <Button
+            variant={selectedSubject === 'all' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setSelectedSubject('all')}
+            className="rounded-full px-4 h-8"
+          >
+            All
           </Button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Input placeholder="Search resources..." disabled />
-        <Select
-          onValueChange={val => setSelectedSubject(val as Subject | 'all')}
-          defaultValue="all"
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Filter by Subject" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Subjects</SelectItem>
-            {subjects.map(subject => (
-              <SelectItem key={subject} value={subject}>
-                {subject}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select disabled>
-          <SelectTrigger>
-            <SelectValue placeholder="Filter by Language" />
-          </SelectTrigger>
-          <SelectContent>
-            {languages.map(lang => (
-              <SelectItem key={lang} value={lang}>
-                {lang}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select disabled>
-          <SelectTrigger>
-            <SelectValue placeholder="Filter by Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Video">Video</SelectItem>
-            <SelectItem value="PDF">PDF</SelectItem>
-            <SelectItem value="Notes">Notes</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {isLoading && (
-        <div className="flex justify-center p-8">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      )}
-
-      {!isLoading && resources?.length === 0 && (
-        <div className="text-center text-muted-foreground py-12">
-          <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-xl font-semibold">No Resources Found</h3>
-          <p className="mt-1 text-sm">
-            {userType === 'teacher'
-              ? 'Get started by adding a new resource.'
-              : 'Your teachers have not added any resources yet.'}
-          </p>
-        </div>
-      )}
-
-      {!isLoading && resources && resources.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {resources.map(resource => (
-            <ResourceCard
-              key={resource.id}
-              resource={resource}
-              userType={userType}
-              firestore={firestore}
-              onPlay={handlePlay}
-              onPlayDubbed={handlePlayDubbed}
-            />
+          {subjects.map(s => (
+            <Button
+              key={s}
+              variant={selectedSubject === s ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedSubject(s)}
+              className="rounded-full px-4 h-8"
+            >
+              {s}
+            </Button>
           ))}
         </div>
-      )}
+
+        <div className="h-6 w-[1px] bg-border/50 mx-2" />
+
+        <div className="flex items-center gap-2 flex-grow">
+          <div className="relative flex-grow max-w-md hidden md:block">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search topics..."
+              className="pl-9 h-9 rounded-full bg-background border-muted hover:border-primary/50 transition-colors"
+              disabled
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Resources Grid */}
+      <div className="min-h-[400px]">
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center p-20 space-y-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-muted-foreground animate-pulse">Loading library...</p>
+          </div>
+        )}
+
+        {!isLoading && resources?.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 border-2 border-dashed border-muted rounded-2xl bg-muted/10 mx-auto max-w-2xl">
+            <div className="p-4 bg-background rounded-full shadow-sm">
+              <BookOpen className="h-10 w-10 text-muted-foreground/50" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold">No Resources Found</h3>
+              <p className="text-muted-foreground">
+                {userType === 'teacher' ? 'Get started by adding your first resource.' : 'Check back later for new content.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && resources && resources.length > 0 && (
+          <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-12">
+            {resources.map(resource => (
+              <ResourceCard
+                key={resource.id}
+                resource={resource}
+                userType={userType}
+                firestore={firestore}
+                onPlay={handlePlay}
+                onPlayDubbed={handlePlayDubbed}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {userType === 'teacher' && (
         <CreateResourceDialog
@@ -1170,4 +1220,25 @@ export default function LibraryPage() {
       />
     </div>
   );
+}
+
+// Simple Helper Icon for Search
+function SearchIcon(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  )
 }
