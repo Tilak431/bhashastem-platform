@@ -13,10 +13,15 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
 
+import { getGoogleCredentials } from '@/lib/google-auth';
+
 // Initialize Firebase Admin SDK if not already initialized
 if (!admin.apps.length) {
   try {
-    admin.initializeApp();
+    const credentials = getGoogleCredentials();
+    admin.initializeApp({
+      credential: credentials ? admin.credential.cert(credentials) : undefined
+    });
   } catch (e) {
     console.error('Firebase admin initialization error', e);
   }
