@@ -170,7 +170,6 @@ function ResourcePlayerDialog({
   }, [dubSegments]);
 
   // Sync Logic
-  // Sync Logic
   useEffect(() => {
     if (!processedSegments || !audioRef.current) return;
 
@@ -268,7 +267,7 @@ function ResourcePlayerDialog({
               <div className="flex items-center gap-3">
                 <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 <p className="text-white text-xs font-medium">
-                  Smart Sync: AI Dubbing Active
+                  Smart Sync: Real-Time Active
                 </p>
               </div>
               {/* Optional: Show active subtitle */}
