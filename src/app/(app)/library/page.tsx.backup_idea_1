@@ -170,9 +170,10 @@ function ResourcePlayerDialog({
   }, [dubSegments]);
 
   // Sync Logic
-  // Sync Logic
   useEffect(() => {
     if (!processedSegments || !audioRef.current) return;
+
+    const audioFn = audioRef.current;
 
     // Find current segment
     const currentSegment = processedSegments.find(
@@ -180,49 +181,39 @@ function ResourcePlayerDialog({
     );
 
     if (currentSegment && currentSegment.audioDataUri) {
-      const audioEl = audioRef.current;
+      // Check if this specific audio is already set/playing
+      // We use a custom attribute or just compare src (though base64 is long)
+      // A better way is to track "currentSegmentIndex"
+      if (audioRef.current.src !== currentSegment.audioDataUri) {
+        audioRef.current.src = currentSegment.audioDataUri;
+        audioRef.current.play().catch(e => console.error("Audio play failed", e));
 
-      // Check if this specific audio is already active
-      // Using a custom attribute to track the exact segment helps avoid relying purely on src string comparison
-      if (audioEl.getAttribute('data-segment-id') !== currentSegment.start) {
-        // Reset handlers to avoid interference
-        audioEl.onloadedmetadata = null;
-        audioEl.onended = null;
-
-        // Set up the speed-up logic
-        audioEl.onloadedmetadata = () => {
-          const audioDuration = audioEl.duration;
+        // Prepare to PAUSE video if audio is longer than segment
+        audioRef.current.onloadedmetadata = () => {
+          const audioDuration = audioRef.current?.duration || 0;
           const segmentDuration = (currentSegment.endTime || 0) - (currentSegment.startTime || 0);
 
-          // Default to 1x
-          let rate = 1.0;
-
-          // If audio is longer than the slot, speed it up to fit!
-          if (audioDuration > segmentDuration) {
-            rate = audioDuration / segmentDuration;
-            // Cap at 2.5x to keep it somewhat intelligible, though user priority is sync.
-            rate = Math.min(rate, 2.5);
+          if (audioDuration > segmentDuration + 0.5) { // 0.5s buffer
+            // Pause video!
+            if (videoRef.current) videoRef.current.pause();
+            setIsPlaying(false);
           }
-
-          audioEl.playbackRate = rate;
-          try {
-            // Start playing
-            audioEl.play().catch(e => console.error("Audio play failed", e));
-          } catch (e) { console.error("Sync error", e); }
         };
 
-        audioEl.src = currentSegment.audioDataUri;
-        audioEl.setAttribute('data-segment-id', currentSegment.start);
+        audioRef.current.onended = () => {
+          // Audio finished, resume video if it was paused
+          if (videoRef.current && videoRef.current.paused) {
+            videoRef.current.play();
+            setIsPlaying(true);
+          }
+        };
       }
     } else {
-      // No segment active.
-      // Do not pause abruptly if strictly following "nearly at the same time", 
-      // as the speed-up ensures it ends exactly when the segment ends.
-      // However, if we drift or jump, we should ensure we don't play old audio.
-      // Only if we are truly outside.
-      // We generally leave it alone or pause if we are far?
-      // Let's safe-guard: if we are NOT in a segment, and audio is playing, it might be trailing overlap?
-      // But with `playbackRate` set precisely, it should have ended.
+      // No segment active, ensure audio is silent/stopped
+      // But don't cut off trailing audio if it's finishing a sentence? 
+      // Our logic above handles flow. If we just exited a segment, let it finish naturally via onended? 
+      // No, if we jump to a silent section, we should probably stop.
+      // For simplicity, let's strictly follow segments.
     }
 
   }, [currentTime, processedSegments]);
