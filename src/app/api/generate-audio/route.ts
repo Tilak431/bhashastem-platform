@@ -47,16 +47,23 @@ export async function POST(req: NextRequest) {
         const credentials = getGoogleCredentials();
         const ttsClient = new TextToSpeechClient(credentials ? { credentials } : {});
 
+        // Truncate text if too long to prevent timeouts/errors (Google TTS limit is ~5000 bytes)
+        let processedText = text;
+        if (text.length > 4000) {
+            console.warn(`Text too long (${text.length} chars), truncating to 4000 chars to avoid timeout.`);
+            processedText = text.substring(0, 4000);
+        }
+
         const voiceConfig = getVoiceConfig(language);
-        console.log(`Generating Audio for ${language || 'default'} using voice: ${voiceConfig.name}`);
+        console.log(`Generating Audio for ${language || 'default'} using voice: ${voiceConfig.name}. Text length: ${processedText.length}`);
 
         const request = {
-            input: { text },
+            input: { text: processedText },
             voice: {
                 languageCode: voiceConfig.languageCode,
                 name: voiceConfig.name
             },
-            audioConfig: { audioEncoding: 'LINEAR16' as const },
+            audioConfig: { audioEncoding: 'MP3' as const },
         };
 
         const [response] = await ttsClient.synthesizeSpeech(request);
@@ -67,7 +74,7 @@ export async function POST(req: NextRequest) {
         }
 
         const audioBase64 = Buffer.from(audioContent).toString('base64');
-        const audioDataUri = `data:audio/wav;base64,${audioBase64}`;
+        const audioDataUri = `data:audio/mp3;base64,${audioBase64}`;
 
         return NextResponse.json({ audioDataUri });
 
