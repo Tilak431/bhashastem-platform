@@ -32,7 +32,7 @@ import {
   updateDocumentNonBlocking,
   addDocumentNonBlocking // Ensure this is available if needed
 } from '@/firebase';
-import { collection, query, orderBy, doc, DocumentReference, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, DocumentReference, writeBatch, serverTimestamp, getDoc, getDocs } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
@@ -266,6 +266,35 @@ export default function ProfileClientView({ userId: profileUserIdProp }: { userI
   useEffect(() => {
     if (userProfile?.bio) setBioText(userProfile.bio);
   }, [userProfile?.bio]);
+
+  // Admin Cleanup
+  const handleAdminCleanup = async () => {
+    if (userProfile?.username !== 'tilak_041' || !firestore || !currentUser) return;
+    if (!window.confirm("WARNING: This will delete ALL other user profiles. This cannot be undone. Are you sure?")) return;
+
+    try {
+      const usersRef = collection(firestore, 'users');
+      const snapshot = await getDocs(usersRef);
+      const batch = writeBatch(firestore);
+      let count = 0;
+
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        // Keep the current user (tilak_041)
+        if (doc.id === currentUser.uid || data.username === 'tilak_041') return;
+
+        batch.delete(doc.ref);
+        count++;
+      });
+
+      await batch.commit();
+      alert(`Successfully deleted ${count} other user profiles.`);
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+      alert("Cleanup failed. See console.");
+    }
+  }
 
   // Actions
   const handleSaveBio = () => {
@@ -516,6 +545,15 @@ export default function ProfileClientView({ userId: profileUserIdProp }: { userI
           </Card>
         </div>
       </div>
+
+      {/* Admin Zone */}
+      {userProfile.username === 'tilak_041' && isOwnProfile && (
+        <div className="flex justify-center pt-8 border-t w-full">
+          <Button variant="destructive" onClick={handleAdminCleanup}>
+            ⚠️ Admin: Remove All Other Accounts
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
