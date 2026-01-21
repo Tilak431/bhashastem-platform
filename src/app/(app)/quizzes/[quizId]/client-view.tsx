@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   useFirestore,
   useDoc,
@@ -20,6 +21,8 @@ import {
   getDocs,
   serverTimestamp,
   increment,
+  orderBy,
+  query,
 } from 'firebase/firestore';
 import {
   Card,
@@ -85,7 +88,7 @@ export default function QuizClientView({ quizId }: { quizId: string }) {
     [firestore, quizId]
   );
   const questionsRef = useMemoFirebase(
-    () => (quizRef ? collection(quizRef, 'questions') : null),
+    () => (quizRef ? query(collection(quizRef, 'questions'), orderBy('createdAt', 'asc')) : null),
     [quizRef]
   );
 
@@ -205,12 +208,20 @@ function TeacherView({
   questions: (Omit<Question, 'answers'> & { ref: DocumentReference })[];
   questionsRef: any;
 }) {
+  const router = useRouter();
+
   const handleAddQuestion = () => {
     if (!questionsRef) return;
     addDocumentNonBlocking(questionsRef, {
       text: 'New Question',
       correctAnswerId: null,
+      createdAt: serverTimestamp(),
     });
+  };
+
+  const handleSaveChanges = () => {
+    // Since documents auto-save on blur, we just navigate back or show success.
+    router.push('/quizzes');
   };
 
   return (
@@ -220,9 +231,14 @@ function TeacherView({
           <EditableQuestion key={q.id} question={q} index={index} />
         )
       )}
-      <Button onClick={handleAddQuestion} variant="outline" disabled={!questionsRef}>
-        <PlusCircle className="mr-2" /> Add Question
-      </Button>
+      <div className="flex gap-4 border-t pt-6">
+        <Button onClick={handleAddQuestion} variant="outline" disabled={!questionsRef}>
+          <PlusCircle className="mr-2" /> Add Question
+        </Button>
+        <Button onClick={handleSaveChanges} className="px-8 bg-green-600 hover:bg-green-700 ml-auto">
+          <Save className="mr-2 h-4 w-4" /> Save Changes
+        </Button>
+      </div>
     </div>
   );
 }

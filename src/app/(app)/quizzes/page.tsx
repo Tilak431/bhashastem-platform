@@ -272,7 +272,7 @@ export default function QuizzesPage() {
       )}
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {quizzes?.map(quiz => {
+        {quizzes?.filter(q => userType === 'teacher' || (q.questionCount && q.questionCount > 0)).map(quiz => {
           const Icon = subjectIconMap[quiz.subject];
           return (
             <Card
