@@ -78,6 +78,13 @@ export default function SearchPage() {
   const { data: users, isLoading } =
     useCollection<UserProfile>(usersQuery);
 
+  // Deduplicate users by name (Visual Fix for duplicate accounts)
+  const uniqueUsers = users?.filter((user, index, self) =>
+    index === self.findIndex((t) => (
+      t.name === user.name
+    ))
+  );
+
   return (
     <div className="flex-1 w-full min-h-screen bg-transparent p-4 md:p-8 max-w-5xl mx-auto">
 
@@ -111,7 +118,7 @@ export default function SearchPage() {
       {/* Results Section */}
       <div className="space-y-6">
 
-        {!isLoading && debouncedSearchTerm && users?.length === 0 && (
+        {!isLoading && debouncedSearchTerm && uniqueUsers?.length === 0 && (
           <Card className="text-center p-12 border-dashed bg-transparent">
             <div className="flex flex-col items-center gap-3">
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
@@ -125,9 +132,9 @@ export default function SearchPage() {
           </Card>
         )}
 
-        {!isLoading && users && users.length > 0 && (
+        {!isLoading && uniqueUsers && uniqueUsers.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {users.map((user) => (
+            {uniqueUsers.map((user) => (
               <Link href={`/profile?id=${user.id}`} key={user.id} className="group block h-full">
                 <Card className="h-full border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden relative">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
