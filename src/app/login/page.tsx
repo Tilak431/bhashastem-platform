@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Card,
@@ -19,7 +19,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
-  AuthError
+  AuthError,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { doc, getDocs, collection, query, where, getDoc } from 'firebase/firestore';
@@ -45,6 +47,15 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Enable Persistence
+  useEffect(() => {
+    if (auth) {
+      setPersistence(auth, browserLocalPersistence).catch((error) => {
+        console.error("Persistence error:", error);
+      });
+    }
+  }, [auth]);
+
   // Toggle Password Visibility
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
@@ -58,7 +69,7 @@ export default function LoginPage() {
       const email = `${username.toLowerCase()}${EMAIL_DOMAIN}`;
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-      // Fetch user role from Firestore to set in localStorage (for immediate UI needs)
+      // Fetch user role from Firestore to set in localStorage
       const userDocRef = doc(firestore, 'users', userCredential.user.uid);
       const userDoc = await getDoc(userDocRef);
 
@@ -67,15 +78,26 @@ export default function LoginPage() {
         localStorage.setItem('userType', userData.userType || 'student');
         localStorage.setItem('userName', userData.name || username);
       } else {
-        // Fallback if doc missing (shouldn't happen)
+        // SELF-REPAIR: Document doesn't exist (legacy/broken state), create it
+        await setDocumentNonBlocking(userDocRef, {
+          id: userCredential.user.uid,
+          name: username, // Fallback name
+          username: username.toLowerCase(),
+          email: email,
+          userType: 'student', // Default
+          totalXp: 0,
+          bio: 'Welcome back!',
+          createdAt: new Date().toISOString()
+        });
         localStorage.setItem('userType', 'student');
+        localStorage.setItem('userName', username);
       }
 
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('Invalid username or password.');
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-email') {
+        setError('Invalid username or password. If you haven\'t signed up, please create an account.');
       } else {
         setError(err.message || 'Login failed.');
       }
@@ -120,13 +142,15 @@ export default function LoginPage() {
     }
 
     try {
-      // 3. Check Username Uniqueness
+      // 3. Check Username Uniqueness (Firestore)
+      // Note: This check helps provide a distinct error message before hitting Auth.
       const usersRef = collection(firestore, 'users');
       const q = query(usersRef, where('username', '==', username.toLowerCase()));
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
-        setError("Username is already taken. Please choose another.");
+        setError("Username already taken. Redirecting to Login...");
+        setTimeout(() => setActiveTab('login'), 1500);
         setLoading(false);
         return;
       }
@@ -137,15 +161,15 @@ export default function LoginPage() {
 
       await updateProfile(userCredential.user, { displayName: name });
 
-      // 5. Create Firestore Doc (Initialize XP here)
+      // 5. Create Firestore Doc
       const userDocRef = doc(firestore, 'users', userCredential.user.uid);
       await setDocumentNonBlocking(userDocRef, {
         id: userCredential.user.uid,
         name: name,
-        username: username.toLowerCase(), // Store username for future checks
+        username: username.toLowerCase(),
         email: email,
         userType: userType,
-        totalXp: 0, // Start with 0 XP
+        totalXp: 0,
         bio: `Hi, I am ${name}!`,
         createdAt: new Date().toISOString()
       });
@@ -158,7 +182,8 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('Signup error:', err);
       if (err.code === 'auth/email-already-in-use') {
-        setError('This username is already registered.');
+        setError('This username is already registered. Please Login.');
+        setTimeout(() => setActiveTab('login'), 2000);
       } else {
         setError(err.message || 'Signup failed.');
       }
