@@ -270,25 +270,36 @@ export default function ProfileClientView({ userId: profileUserIdProp }: { userI
   // Admin Cleanup
   const handleAdminCleanup = async () => {
     if (userProfile?.username !== 'tilak_041' || !firestore || !currentUser) return;
-    if (!window.confirm("WARNING: This will delete ALL other user profiles. This cannot be undone. Are you sure?")) return;
+    if (!window.confirm("DANGER: This will delete ALL other users and ALL posts in the system. Are you sure?")) return;
 
     try {
+      // Delete Users
       const usersRef = collection(firestore, 'users');
-      const snapshot = await getDocs(usersRef);
-      const batch = writeBatch(firestore);
-      let count = 0;
+      const userSnapshot = await getDocs(usersRef);
+      const userBatch = writeBatch(firestore);
+      let userCount = 0;
 
-      snapshot.docs.forEach((doc) => {
+      userSnapshot.docs.forEach((doc) => {
         const data = doc.data();
-        // Keep the current user (tilak_041)
         if (doc.id === currentUser.uid || data.username === 'tilak_041') return;
-
-        batch.delete(doc.ref);
-        count++;
+        userBatch.delete(doc.ref);
+        userCount++;
       });
+      await userBatch.commit();
 
-      await batch.commit();
-      alert(`Successfully deleted ${count} other user profiles.`);
+      // Delete Posts
+      const postsRef = collection(firestore, 'posts');
+      const postSnapshot = await getDocs(postsRef);
+      const postBatch = writeBatch(firestore);
+      let postCount = 0;
+
+      postSnapshot.docs.forEach((doc) => {
+        postBatch.delete(doc.ref);
+        postCount++;
+      });
+      await postBatch.commit();
+
+      alert(`Admin Cleanup Complete.\nDeleted ${userCount} users.\nDeleted ${postCount} posts.`);
       window.location.reload();
     } catch (e) {
       console.error(e);
