@@ -87,14 +87,18 @@ export default function QuizClientView({ quizId }: { quizId: string }) {
       firestore ? doc(firestore, `classSections/IS-B/quizzes/${quizId}`) : null,
     [firestore, quizId]
   );
-  const questionsRef = useMemoFirebase(
-    () => (quizRef ? query(collection(quizRef, 'questions'), orderBy('createdAt', 'asc')) : null),
+  const questionsCollection = useMemoFirebase(
+    () => (quizRef ? collection(quizRef, 'questions') : null),
     [quizRef]
+  );
+  const questionsQuery = useMemoFirebase(
+    () => (questionsCollection ? query(questionsCollection, orderBy('createdAt', 'asc')) : null),
+    [questionsCollection]
   );
 
   const { data: quiz, isLoading: isQuizLoading } = useDoc<Quiz>(quizRef);
   const { data: questionsData, isLoading: areQuestionsLoading } =
-    useCollection<Omit<Question, 'answers' | 'ref'>>(questionsRef);
+    useCollection<Omit<Question, 'answers' | 'ref'>>(questionsQuery);
 
   useEffect(() => {
     const type = localStorage.getItem('userType') as
@@ -141,7 +145,7 @@ export default function QuizClientView({ quizId }: { quizId: string }) {
       )}
 
       {userType === 'teacher' ? (
-        <TeacherView questions={questions || []} questionsRef={questionsRef} />
+        <TeacherView questions={questions || []} questionsCollection={questionsCollection} />
       ) : (
         <StudentView quizId={quizId} questions={questions} />
       )}
@@ -203,16 +207,16 @@ function EditableQuizHeader({
 // --- Teacher View ---
 function TeacherView({
   questions,
-  questionsRef,
+  questionsCollection,
 }: {
   questions: (Omit<Question, 'answers'> & { ref: DocumentReference })[];
-  questionsRef: any;
+  questionsCollection: any;
 }) {
   const router = useRouter();
 
   const handleAddQuestion = () => {
-    if (!questionsRef) return;
-    addDocumentNonBlocking(questionsRef, {
+    if (!questionsCollection) return;
+    addDocumentNonBlocking(questionsCollection, {
       text: 'New Question',
       correctAnswerId: null,
       createdAt: serverTimestamp(),
@@ -232,7 +236,7 @@ function TeacherView({
         )
       )}
       <div className="flex gap-4 border-t pt-6">
-        <Button onClick={handleAddQuestion} variant="outline" disabled={!questionsRef}>
+        <Button onClick={handleAddQuestion} variant="outline" disabled={!questionsCollection}>
           <PlusCircle className="mr-2" /> Add Question
         </Button>
         <Button onClick={handleSaveChanges} className="px-8 bg-green-600 hover:bg-green-700 ml-auto">
