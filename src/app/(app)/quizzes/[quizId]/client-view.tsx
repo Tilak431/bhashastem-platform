@@ -117,9 +117,9 @@ export default function QuizClientView({ quizId }: { quizId: string }) {
   const questions =
     firestore && questionsData
       ? questionsData.map(q => ({
-          ...q,
-          ref: doc(firestore, `classSections/IS-B/quizzes/${quizId}/questions/${q.id}`),
-        }))
+        ...q,
+        ref: doc(firestore, `classSections/IS-B/quizzes/${quizId}/questions/${q.id}`),
+      }))
       : [];
 
   return (
@@ -203,7 +203,7 @@ function TeacherView({
   questionsRef,
 }: {
   questions: (Omit<Question, 'answers'> & { ref: DocumentReference })[];
-  questionsRef: Query | null;
+  questionsRef: any;
 }) {
   const handleAddQuestion = () => {
     if (!questionsRef) return;
@@ -310,7 +310,7 @@ function EditableAnswersList({
       {(answers || []).map(answer => (
         <EditableAnswer
           key={answer.id}
-          answer={{...answer, ref: doc(answersRef!.firestore, answersRef!.path, answer.id)}}
+          answer={{ ...answer, ref: doc(answersRef!.firestore, answersRef!.path, answer.id) }}
           question={question}
           allAnswers={answers || []}
         />
@@ -345,7 +345,7 @@ function EditableAnswer({
   const handleSetCorrect = async () => {
     if (!firestore) return;
     const batch = writeBatch(firestore);
-    
+
     // Set this answer as correct
     batch.update(answer.ref, { isCorrect: true });
     // Set this as the correct answer ID on the question
@@ -391,7 +391,7 @@ function EditableAnswer({
 }
 
 
-// --- Student View ---
+
 type TranslatedContent = {
   questionText: string;
   answers: { [answerId: string]: string };
@@ -404,96 +404,180 @@ function StudentView({
   quizId: string;
   questions: (Omit<Question, 'answers' | 'ref'> & { ref: DocumentReference })[] | null;
 }) {
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>(
-    {}
-  );
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>('English');
   const firestore = useFirestore();
   const { user } = useUser();
-  const [startTime, setStartTime] = useState(Date.now());
+  const [startTime] = useState(Date.now());
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Progress Calculation
+  const totalQuestions = questions?.length || 0;
+  const answeredCount = Object.keys(selectedAnswers).length;
+  const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
+
+  // Timer Effect
+  useEffect(() => {
+    if (!submitted) {
+      const interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [submitted, startTime]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
 
 
   const handleAnswerChange = (questionId: string, answerId: string) => {
     setSelectedAnswers(prev => ({ ...prev, [questionId]: answerId }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!questions || !firestore || !user) return;
-    
+
     let newScore = 0;
     questions.forEach((q: Omit<Question, 'answers' | 'ref'>) => {
       if (selectedAnswers[q.id] === q.correctAnswerId) {
         newScore++;
       }
     });
-    
-    const timeTaken = (Date.now() - startTime) / 1000; // in seconds
-    const xpGained = newScore * 10; // 10 XP per correct answer
+
+    const timeTaken = (Date.now() - startTime) / 1000;
+    const xpGained = newScore * 10;
+    const accuracy = ((newScore / totalQuestions) * 100).toFixed(1);
 
     setScore(newScore);
     setSubmitted(true);
-    
-    const resultsRef = collection(firestore, 'users', user.uid, 'studentQuizResults');
-    addDocumentNonBlocking(resultsRef, {
-        userId: user.uid,
-        quizId: quizId,
-        score: newScore,
-        totalQuestions: questions.length,
-        submissionDateTime: serverTimestamp(),
-        timeTaken,
-        xpGained
+
+    // 1. Store in User Profile (for personal history)
+    const userResultsRef = collection(firestore, 'users', user.uid, 'studentQuizResults');
+    await addDocumentNonBlocking(userResultsRef, {
+      userId: user.uid,
+      quizId: quizId,
+      score: newScore,
+      totalQuestions: totalQuestions,
+      submissionDateTime: serverTimestamp(),
+      timeTaken,
+      xpGained,
+      answers: selectedAnswers, // Detailed answers for future review
+      accuracy
     });
 
+    // 2. Store in Quiz Submissions (for Teacher Analytics)
+    // Using setDoc with userID to prevent duplicates if retrying logic isn't blocked elsewhere, 
+    // but here we use addDoc to allow multiple attempts.
+    const quizSubmissionsRef = collection(firestore, `classSections/IS-B/quizzes/${quizId}/submissions`);
+    await addDocumentNonBlocking(quizSubmissionsRef, {
+      userId: user.uid,
+      userName: user.displayName || "Unknown Student",
+      score: newScore,
+      totalQuestions: totalQuestions,
+      submittedAt: serverTimestamp(),
+      xpGained,
+      timeTaken
+    });
+
+    // 3. Update User XP
     const userProfileRef = doc(firestore, 'users', user.uid);
     updateDocumentNonBlocking(userProfileRef, {
-        totalXp: increment(xpGained)
+      totalXp: increment(xpGained)
     });
   };
 
+  if (!questions) return <Loader2 className="animate-spin" />;
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="p-4 flex items-center gap-4">
-            <Languages className="h-5 w-5 text-muted-foreground"/>
-            <Label htmlFor="language-select" className="text-sm font-medium">Quiz Language</Label>
-            <Select onValueChange={(value) => setSelectedLanguage(value as Language)} defaultValue={selectedLanguage}>
-                <SelectTrigger id="language-select" className="w-[180px]">
-                    <SelectValue placeholder="Select language" />
-                </SelectTrigger>
-                <SelectContent>
-                    {languages.map(lang => (
-                        <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-                    ))}
-                </SelectContent>
+    <div className="space-y-6 max-w-3xl mx-auto pb-10">
+
+      {/* Quiz Header / Stats Bar */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-4 pt-2 border-b space-y-4">
+        <div className="flex justify-between items-center px-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="language-select" className="text-sm font-medium text-muted-foreground">Language:</Label>
+            <Select onValueChange={(value) => setSelectedLanguage(value as Language)} defaultValue={selectedLanguage} disabled={submitted}>
+              <SelectTrigger id="language-select" className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Select language" />
+              </SelectTrigger>
+              <SelectContent>
+                {languages.map(lang => (
+                  <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                ))}
+              </SelectContent>
             </Select>
-        </CardContent>
-      </Card>
-      
-      {questions?.map((q, index: number) => (
-        <QuestionDisplay
-          key={q.id}
-          question={q}
-          index={index}
-          selectedAnswer={selectedAnswers[q.id]}
-          onAnswerChange={handleAnswerChange}
-          submitted={submitted}
-          language={selectedLanguage}
-        />
-      ))}
-      <CardFooter className="justify-end p-0 pt-4">
+          </div>
+          <div className={`font-mono font-bold text-xl ${submitted ? 'text-green-500' : 'text-primary'}`}>
+            {formatTime(elapsedTime)}
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+          <div
+            className="bg-primary h-full transition-all duration-500 ease-out"
+            style={{ width: `${submitted ? (score / totalQuestions) * 100 : progress}%`, backgroundColor: submitted ? (score / totalQuestions > 0.5 ? '#22c55e' : '#ef4444') : undefined }}
+          />
+        </div>
+      </div>
+
+      {submitted && (
+        <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20 shadow-lg">
+          <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+            <div className="h-20 w-20 rounded-full bg-green-100 flex items-center justify-center border-4 border-green-500 shadow-xl mb-2">
+              <Check className="h-10 w-10 text-green-600" />
+            </div>
+            <h2 className="text-4xl font-extrabold text-green-700">Quiz Completed!</h2>
+            <div className="grid grid-cols-3 gap-8 w-full max-w-md pt-4">
+              <div>
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Score</p>
+                <p className="text-3xl font-bold">{score} / {totalQuestions}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">XP</p>
+                <p className="text-3xl font-bold text-amber-500">+{score * 10}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Accuracy</p>
+                <p className="text-3xl font-bold">{((score / totalQuestions) * 100).toFixed(0)}%</p>
+              </div>
+            </div>
+            <Button onClick={() => window.location.reload()} variant="outline" className="mt-6">Try Again</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-8">
+        {questions.map((q, index: number) => (
+          <QuestionDisplay
+            key={q.id}
+            question={q}
+            index={index}
+            selectedAnswer={selectedAnswers[q.id]}
+            onAnswerChange={handleAnswerChange}
+            submitted={submitted}
+            language={selectedLanguage}
+          />
+        ))}
+      </div>
+
+      <CardFooter className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t z-40 flex justify-center md:static md:bg-transparent md:border-0 md:p-0 md:justify-end">
         {!submitted ? (
           <Button
             onClick={handleSubmit}
+            size="lg"
+            className="w-full md:w-auto shadow-lg hover:shadow-primary/25 transition-all text-lg px-8 rounded-full"
             disabled={!questions || Object.keys(selectedAnswers).length !== questions.length}
           >
-            Submit Quiz
+            Submit Assessment
           </Button>
         ) : (
-          <div className="text-xl font-bold">
-            Your Score: {score} / {questions?.length}
-          </div>
+          <p className="text-muted-foreground text-sm italic">Results saved to your profile.</p>
         )}
       </CardFooter>
     </div>
@@ -527,7 +611,7 @@ function QuestionDisplay({
   const [isTranslating, setIsTranslating] = useState(false);
 
   const translateContent = useCallback(async (lang: Language, qText: string, ans: Omit<Answer, 'ref'>[]) => {
-    const originalAnswers: {[id: string]: string} = {};
+    const originalAnswers: { [id: string]: string } = {};
     ans.forEach(a => originalAnswers[a.id] = a.text);
     const originalContent = { questionText: qText, answers: originalAnswers };
 
@@ -535,7 +619,7 @@ function QuestionDisplay({
       setTranslatedContent(originalContent);
       return;
     }
-    
+
     setIsTranslating(true);
     try {
       const answersToTranslate = ans.map(a => ({ id: a.id, text: a.text }));
@@ -545,7 +629,7 @@ function QuestionDisplay({
         targetLanguage: lang,
       });
 
-      const translatedAnswers: {[id: string]: string} = {};
+      const translatedAnswers: { [id: string]: string } = {};
       result.translatedAnswers.forEach(a => {
         translatedAnswers[a.id] = a.text;
       });
@@ -558,7 +642,7 @@ function QuestionDisplay({
     } catch (e) {
       console.error("Translation failed", e);
       // Fallback to English on failure
-       setTranslatedContent(originalContent);
+      setTranslatedContent(originalContent);
     } finally {
       setIsTranslating(false);
     }
