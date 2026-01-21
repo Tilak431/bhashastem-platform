@@ -595,11 +595,19 @@ function AiTranslationEngine({
         );
       }
 
-      // Generate Audio
-      const { audioDataUri } = await generateAudio({
-        text: textToSpeak,
-        language: audioLang
+      // Generate Audio via API
+      const response = await fetch('/api/generate-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToSpeak, language: audioLang }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate audio');
+      }
+
+      const { audioDataUri } = await response.json();
 
       setAudioResultUri(audioDataUri);
 
