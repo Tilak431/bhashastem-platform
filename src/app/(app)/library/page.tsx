@@ -202,8 +202,8 @@ function ResourcePlayerDialog({
           // If audio is longer than the slot, speed it up to fit!
           if (audioDuration > segmentDuration) {
             rate = audioDuration / segmentDuration;
-            // Cap at 2.5x to keep it somewhat intelligible, though user priority is sync.
-            rate = Math.min(rate, 2.5);
+            // Cap at 1.4x to keep it intelligible, prioritizing quality over perfect duration match.
+            rate = Math.min(rate, 1.4);
           }
 
           audioEl.playbackRate = rate;

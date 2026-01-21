@@ -22,6 +22,7 @@ import {
     useMemoFirebase,
     addDocumentNonBlocking,
     updateDocumentNonBlocking,
+    deleteDocumentNonBlocking,
     useCollection
 } from "@/firebase";
 import {
@@ -122,23 +123,59 @@ function PostHeader({ userId, ownerId, postId, onDelete }: { userId: string, own
     );
 }
 
-function CommentAuthor({ userId, content }: { userId: string, content: string }) {
+function CommentAuthor({
+    userId,
+    content,
+    postId,
+    commentId
+}: {
+    userId: string,
+    content: string,
+    postId?: string,
+    commentId?: string
+}) {
     const firestore = useFirestore();
+    const { user } = useUser();
     const userRef = useMemoFirebase(
         () => (firestore ? doc(firestore, 'users', userId) : null),
         [firestore, userId]
     );
     const { data: userProfile } = useDoc<UserProfile>(userRef);
 
+    const handleDelete = async () => {
+        if (!firestore || !postId || !commentId) return;
+        // eslint-disable-next-line no-restricted-globals
+        if (!confirm("Delete this comment?")) return;
+
+        const commentRef = doc(firestore, 'posts', postId, 'comments', commentId);
+        const postRef = doc(firestore, 'posts', postId);
+
+        await deleteDocumentNonBlocking(commentRef);
+        updateDocumentNonBlocking(postRef, { commentCount: increment(-1) });
+    };
+
+    const isAuthor = user?.uid === userId;
+
     return (
-        <div className="text-sm leading-snug">
-            <Link
-                href={`/profile?id=${userId}`}
-                className="font-semibold hover:underline mr-2"
-            >
-                {userProfile?.name || '...'}
-            </Link>
-            <span>{content}</span>
+        <div className="text-sm leading-snug flex items-start justify-between group">
+            <div>
+                <Link
+                    href={`/profile?id=${userId}`}
+                    className="font-semibold hover:underline mr-2"
+                >
+                    {userProfile?.name || '...'}
+                </Link>
+                <span>{content}</span>
+            </div>
+            {isAuthor && commentId && (
+                <button
+                    onClick={handleDelete}
+                    className="text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                    title="Delete comment"
+                >
+                    <Trash2 className="h-3 w-3" />
+                </button>
+            )}
         </div>
     );
 }
@@ -193,7 +230,13 @@ function InlineComments({ postId }: { postId: string }) {
             )}
 
             {displayComments.map((c: any) => (
-                <CommentAuthor key={c.id} userId={c.userId} content={c.content} />
+                <CommentAuthor
+                    key={c.id}
+                    userId={c.userId}
+                    content={c.content}
+                    postId={postId}
+                    commentId={c.id}
+                />
             ))}
 
             <form onSubmit={handleAddComment} className="flex items-center gap-2 mt-2 border-t pt-2 border-border/40">
