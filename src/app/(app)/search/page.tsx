@@ -49,8 +49,18 @@ export default function SearchPage() {
     );
   }, [firestore, searchTerm]);
 
-  const { data: users, isLoading } =
+  const { data: usersData, isLoading } =
     useCollection<UserProfile>(usersQuery);
+
+  const users = useMemo(() => {
+    if (!usersData) return [];
+    const seen = new Set();
+    return usersData.filter(user => {
+      if (seen.has(user.name)) return false;
+      seen.add(user.name);
+      return true;
+    });
+  }, [usersData]);
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8">
@@ -99,8 +109,8 @@ export default function SearchPage() {
                 <Card className="hover:bg-muted/50 transition-colors">
                   <CardContent className="p-4 flex items-center gap-4">
                     <Avatar className="h-12 w-12">
-                       <AvatarImage src={`https://picsum.photos/seed/${user.name}/80/80`} />
-                       <AvatarFallback>
+                      <AvatarImage src={`https://picsum.photos/seed/${user.name}/80/80`} />
+                      <AvatarFallback>
                         {user.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -116,13 +126,13 @@ export default function SearchPage() {
         )}
 
         {!searchTerm && (
-             <div className="text-center text-muted-foreground py-12">
-                <User className="h-12 w-12 mx-auto mb-4"/>
-                <h3 className="text-xl font-semibold">Search for a User</h3>
-                <p>
-                    Start typing in the search bar above to find someone.
-                </p>
-            </div>
+          <div className="text-center text-muted-foreground py-12">
+            <User className="h-12 w-12 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold">Search for a User</h3>
+            <p>
+              Start typing in the search bar above to find someone.
+            </p>
+          </div>
         )}
       </div>
     </div>
