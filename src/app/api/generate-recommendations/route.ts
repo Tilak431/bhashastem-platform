@@ -11,6 +11,21 @@ const RecommendationSchema = z.object({
     learningGaps: z.string().min(10, "Please describe learning gaps in at least 10 characters."),
 });
 
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+    try {
+        return await operation();
+    } catch (error: any) {
+        if (retries > 0 && (error?.status === 429 || error?.code === 429 || error?.code === 'RESOURCE_EXHAUSTED' || error?.message?.includes('429'))) {
+            console.log(`Rate limited. Retrying in ${delay}ms... (${retries} retries left)`);
+            await wait(delay);
+            return retryOperation(operation, retries - 1, delay * 2);
+        }
+        throw error;
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -26,11 +41,11 @@ export async function POST(req: NextRequest) {
 
         const { language, curriculum, learningGaps } = validation.data;
 
-        const result = await recommendRelevantResources({
+        const result = await retryOperation(() => recommendRelevantResources({
             language,
             curriculum,
             learningGaps,
-        });
+        }));
 
         return NextResponse.json({
             recommendations: result.resourceRecommendations
@@ -38,9 +53,15 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error('Recommendation generation error:', error);
+
+        const isRateLimit = error?.status === 429 || error?.code === 429 || error?.code === 'RESOURCE_EXHAUSTED';
+        const errorMessage = isRateLimit
+            ? 'AI service is currently busy. Please try again in top a few moments.'
+            : (error.message || 'Failed to generate recommendations');
+
         return NextResponse.json(
-            { error: error.message || 'Failed to generate recommendations' },
-            { status: 500 }
+            { error: errorMessage },
+            { status: isRateLimit ? 429 : 500 }
         );
     }
 }
