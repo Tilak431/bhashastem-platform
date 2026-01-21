@@ -54,6 +54,8 @@ const prompt = ai.definePrompt({
   Curriculum: {{{curriculum}}}
   Learning Gaps: {{{learningGaps}}}
 
+  Important: The output MUST be in the same language as the 'Language' specified above. Even if the resource names are in English, the description and explanation must be in {{{language}}}.
+  
   Provide a detailed and helpful list of resources.
   `,
 });
