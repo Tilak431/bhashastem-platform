@@ -42,6 +42,21 @@ export async function recommendRelevantResources(
   return recommendRelevantResourcesFlow(input);
 }
 
+const prompt = ai.definePrompt({
+  name: 'recommendRelevantResourcesPrompt',
+  input: { schema: RecommendRelevantResourcesInputSchema },
+  output: { schema: RecommendRelevantResourcesOutputSchema },
+  prompt: `You are an expert in recommending educational resources to students.
+
+  Based on the student's native language, curriculum, and identified learning gaps, recommend a list of relevant learning resources.
+
+  Language: {{{language}}}
+  Curriculum: {{{curriculum}}}
+  Learning Gaps: {{{learningGaps}}}
+
+  Provide a detailed and helpful list of resources.
+  `,
+});
 
 const recommendRelevantResourcesFlow = ai.defineFlow(
   {
@@ -49,27 +64,8 @@ const recommendRelevantResourcesFlow = ai.defineFlow(
     inputSchema: RecommendRelevantResourcesInputSchema,
     outputSchema: RecommendRelevantResourcesOutputSchema,
   },
-  async (input) => {
-    const { text } = await ai.generate({
-      model: 'vertexai/gemini-2.0-flash-thinking-exp-1219',
-      prompt: `You are an expert in recommending educational resources to students.
-        
-        Based on the student's native language, curriculum, and identified learning gaps, recommend a list of relevant learning resources.
-        
-        Language: ${input.language}
-        Curriculum: ${input.curriculum}
-        Learning Gaps: ${input.learningGaps}
-        
-        Provide a detailed and helpful list of resources in Markdown format.
-        Do not output JSON. Just output the content directly.`,
-    });
-
-    if (!text) {
-      throw new Error('Failed to generate recommendations');
-    }
-
-    return {
-      resourceRecommendations: text
-    };
+  async input => {
+    const { output } = await prompt(input);
+    return output!;
   }
 );
