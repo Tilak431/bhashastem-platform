@@ -51,7 +51,7 @@ const recommendRelevantResourcesFlow = ai.defineFlow(
   },
   async (input) => {
     const { text } = await ai.generate({
-      model: 'vertexai/gemini-2.0-flash-exp',
+      model: 'vertexai/gemini-2.0-flash-thinking-exp-1219',
       prompt: `You are an expert in recommending educational resources to students.
         
         Based on the student's native language, curriculum, and identified learning gaps, recommend a list of relevant learning resources.
