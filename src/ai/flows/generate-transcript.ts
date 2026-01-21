@@ -11,7 +11,11 @@ const GenerateTranscriptInputSchema = z.object({
 export type GenerateTranscriptInput = z.infer<typeof GenerateTranscriptInputSchema>;
 
 const GenerateTranscriptOutputSchema = z.object({
-    transcript: z.string().describe('The generated transcript in the target language.'),
+    segments: z.array(z.object({
+        start: z.string().describe('Start time of the segment in "MM:SS" format'),
+        end: z.string().describe('End time of the segment in "MM:SS" format'),
+        text: z.string().describe('The translated text for this segment'),
+    })).describe('List of translated speech segments with timestamps'),
 });
 
 export type GenerateTranscriptOutput = z.infer<typeof GenerateTranscriptOutputSchema>;
@@ -24,15 +28,21 @@ const generateTranscriptFlow = ai.defineFlow(
     },
     async ({ fileUrl, targetLanguage }) => {
         // We use the multimodal model to process the video directly
-        const { text } = await ai.generate({
+        const { output } = await ai.generate({
             model: 'vertexai/gemini-2.0-flash-exp',
+            output: { schema: GenerateTranscriptOutputSchema },
             prompt: [
                 { media: { url: fileUrl } },
                 {
                     text: `You are an expert transcriber and translator. 
 please transcribe the speech from this video and translate it directly into ${targetLanguage}.
-Provide ONLY the translated transcript text. Do not include timestamps or user names unless they are essential.
-The output should be the continuous text of the speech in ${targetLanguage}.`
+Divide the speech into logical sentence-level segments.
+For each segment, provide:
+1. "start": The start timestamp in MM:SS format (e.g., "00:05").
+2. "end": The end timestamp in MM:SS format (e.g., "00:12").
+3. "text": The translated text in ${targetLanguage}.
+
+Return ONLY the JSON object matching the schema.`
                 }
             ],
             config: {
@@ -40,13 +50,11 @@ The output should be the continuous text of the speech in ${targetLanguage}.`
             }
         });
 
-        if (!text) {
+        if (!output) {
             throw new Error('Failed to generate transcript.');
         }
 
-        return {
-            transcript: text,
-        };
+        return output;
     }
 );
 

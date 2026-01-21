@@ -37,46 +37,57 @@ const getVoiceConfig = (language?: string) => {
 
 export async function POST(req: NextRequest) {
     try {
-        const { text, language } = await req.json();
+        const { segments, language } = await req.json();
 
-        if (!text) {
-            return NextResponse.json({ error: 'Text is required' }, { status: 400 });
+        if (!segments || !Array.isArray(segments) || segments.length === 0) {
+            return NextResponse.json({ error: 'Segments array is required' }, { status: 400 });
         }
 
         // Initialize Google Cloud TTS Client
         const credentials = getGoogleCredentials();
         const ttsClient = new TextToSpeechClient(credentials ? { credentials } : {});
 
-        // Truncate text if too long to prevent timeouts/errors (Google TTS limit is ~5000 bytes)
-        let processedText = text;
-        if (text.length > 4000) {
-            console.warn(`Text too long (${text.length} chars), truncating to 4000 chars to avoid timeout.`);
-            processedText = text.substring(0, 4000);
-        }
-
         const voiceConfig = getVoiceConfig(language);
-        console.log(`Generating Audio for ${language || 'default'} using voice: ${voiceConfig.name}. Text length: ${processedText.length}`);
+        console.log(`Generating Audio for ${segments.length} segments in ${language || 'default'} using voice: ${voiceConfig.name}`);
 
-        const request = {
-            input: { text: processedText },
-            voice: {
-                languageCode: voiceConfig.languageCode,
-                name: voiceConfig.name
-            },
-            audioConfig: { audioEncoding: 'MP3' as const },
-        };
+        // Process segments in parallel
+        const processedSegments = await Promise.all(
+            segments.map(async (segment: any, index: number) => {
+                if (!segment.text) return segment;
 
-        const [response] = await ttsClient.synthesizeSpeech(request);
-        const audioContent = response.audioContent;
+                try {
+                    const request = {
+                        input: { text: segment.text },
+                        voice: {
+                            languageCode: voiceConfig.languageCode,
+                            name: voiceConfig.name
+                        },
+                        audioConfig: { audioEncoding: 'MP3' as const },
+                    };
 
-        if (!audioContent) {
-            throw new Error('Failed to generate audio content.');
-        }
+                    const [response] = await ttsClient.synthesizeSpeech(request);
+                    const audioContent = response.audioContent;
 
-        const audioBase64 = Buffer.from(audioContent).toString('base64');
-        const audioDataUri = `data:audio/mp3;base64,${audioBase64}`;
+                    if (!audioContent) {
+                        console.warn(`Failed to generate audio for segment ${index}`);
+                        return { ...segment, error: 'No audio content' };
+                    }
 
-        return NextResponse.json({ audioDataUri });
+                    const audioBase64 = Buffer.from(audioContent).toString('base64');
+                    const audioDataUri = `data:audio/mp3;base64,${audioBase64}`;
+
+                    return {
+                        ...segment,
+                        audioDataUri,
+                    };
+                } catch (err: any) {
+                    console.error(`Error generating audio for segment ${index}:`, err);
+                    return { ...segment, error: err.message };
+                }
+            })
+        );
+
+        return NextResponse.json({ segments: processedSegments });
 
     } catch (error: any) {
         console.error('Audio generation error:', error);
