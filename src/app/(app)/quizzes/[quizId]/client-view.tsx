@@ -223,7 +223,7 @@ function TeacherView({
   const handleAddQuestion = () => {
     if (!questionsCollection || !quizRef) return;
     addDocumentNonBlocking(questionsCollection, {
-      text: 'New Question',
+      text: '',
       correctAnswerId: null,
       createdAt: serverTimestamp(),
     });
@@ -302,6 +302,7 @@ function EditableQuestion({
             onChange={e => setQuestionText(e.target.value)}
             onBlur={handleBlur}
             className="flex-1"
+            placeholder="Type your question here..."
           />
           <Button
             variant="ghost"
