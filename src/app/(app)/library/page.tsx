@@ -64,7 +64,10 @@ import {
   PlayCircle,
   UploadCloud,
   Sparkles,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from "next-themes";
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -905,7 +908,7 @@ function ResourceCard({
   return (
     <>
       <div
-        className={`group relative flex flex-col bg-card rounded-xl border shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden ${showAiStudio ? 'ring-2 ring-primary/20' : ''}`}
+        className={`group relative flex flex-col bg-card rounded-xl border border-border/50 hover:border-primary/50 shadow-sm hover:shadow-2xl hover:shadow-primary/10 transition-all duration-300 overflow-hidden ${showAiStudio ? 'ring-2 ring-primary/20' : ''}`}
       >
         {/* Thumbnail Section */}
         <div
@@ -929,8 +932,11 @@ function ResourceCard({
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center h-full bg-secondary/50">
-              <TypeIcon className="h-12 w-12 text-muted-foreground/50" />
+            <div className="flex items-center justify-center h-full bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 group-hover:from-indigo-500/20 group-hover:via-purple-500/20 group-hover:to-pink-500/20 transition-all">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full" />
+                <TypeIcon className="relative h-12 w-12 text-primary/60 group-hover:text-primary transition-colors" />
+              </div>
             </div>
           )}
 
@@ -1036,6 +1042,7 @@ function ResourceCard({
 }
 
 export default function LibraryPage() {
+  const { setTheme, theme } = useTheme();
   const firestore = useFirestore();
   const [userType, setUserType] = useState<'student' | 'teacher' | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -1117,14 +1124,26 @@ export default function LibraryPage() {
               Immersive STEM learning resources curated for your success.
             </p>
           </div>
-          {userType === 'teacher' && (
+          <div className="flex items-center gap-3">
             <Button
-              onClick={() => setIsCreateDialogOpen(true)}
-              className="shadow-lg hover:shadow-primary/20 transition-all rounded-full px-6"
+              variant="outline"
+              size="icon"
+              className="rounded-full bg-background/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
+              <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-orange-500" />
+              <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-primary" />
+              <span className="sr-only">Toggle theme</span>
             </Button>
-          )}
+            {userType === 'teacher' && (
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="shadow-lg hover:shadow-primary/20 transition-all rounded-full px-6 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
