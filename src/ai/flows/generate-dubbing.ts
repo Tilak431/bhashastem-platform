@@ -1,4 +1,5 @@
 'use server';
+export const maxDuration = 60; // Set timeout to 60 seconds (max for Vercel Hobby)
 /**
  * @fileOverview A flow that translates full text and generates audio for the translation (dubbing).
  *
