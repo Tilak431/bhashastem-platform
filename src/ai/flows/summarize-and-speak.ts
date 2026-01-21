@@ -73,6 +73,18 @@ import { getGoogleCredentials } from '@/lib/google-auth';
 const credentials = getGoogleCredentials();
 const ttsClient = new TextToSpeechClient(credentials ? { credentials } : {});
 
+// Helper to map language names to Google Cloud TTS language codes
+const getLanguageCode = (language: string) => {
+  const langMap: Record<string, string> = {
+    'Hindi': 'hi-IN',
+    'Tamil': 'ta-IN',
+    'Bengali': 'bn-IN',
+    'Kannada': 'kn-IN',
+    'English': 'en-IN',
+  };
+  return langMap[language] || 'en-US';
+};
+
 const summarizeAndSpeakFlow = ai.defineFlow(
   {
     name: 'summarizeAndSpeakFlow',
@@ -88,10 +100,12 @@ const summarizeAndSpeakFlow = ai.defineFlow(
     const summary = translationOutput.translatedSummary;
 
     // Step 2: Text-to-Speech (Standard Google Cloud TTS)
+    const languageCode = getLanguageCode(targetLanguage);
+
     const request = {
       input: { text: summary },
       // Select the language and SSML voice gender (optional)
-      voice: { languageCode: 'en-US', ssmlGender: 'NEUTRAL' as const },
+      voice: { languageCode: languageCode, ssmlGender: 'NEUTRAL' as const },
       // select the type of audio encoding
       audioConfig: { audioEncoding: 'LINEAR16' as const },
     };
