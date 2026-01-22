@@ -643,6 +643,7 @@ const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
         "It is halved": "यह आधी हो जाती है",
         "It stays the same": "यह समान रहती है",
         "It doubles": "यह दोगुनी हो जाती है",
+        "It is doubled": "यह दोगुनी हो जाती है",
         "It quadruples": "यह चौगुनी हो जाती है"
       }
     }
@@ -663,6 +664,7 @@ const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
         "It is halved": "ಇದು ಅರ್ಧದಷ್ಟಾಗುತ್ತದೆ",
         "It stays the same": "ಇದು ಒಂದೇ ಆಗಿರುತ್ತದೆ",
         "It doubles": "ಇದು ದ್ವಿಗುಣಗೊಳ್ಳುತ್ತದೆ",
+        "It is doubled": "ಇದು ದ್ವಿಗುಣಗೊಳ್ಳುತ್ತದೆ",
         "It quadruples": "ಇದು ನಾಲ್ಕು ಪಟ್ಟು ಹೆಚ್ಚಾಗುತ್ತದೆ"
       }
     }
@@ -684,8 +686,8 @@ const processQueue = async () => {
       } catch (e) {
         console.error("Queue task failed", e);
       }
-      // Small delay to prevent hitting rate limits even with sequential calls
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Increased delay to 800ms to be safe with rate limits on desktop and ensure reliability
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
   }
   isProcessingQueue = false;
