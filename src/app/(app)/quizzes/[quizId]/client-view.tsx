@@ -622,6 +622,9 @@ function StudentView({
   );
 }
 
+// Simple in-memory cache for translations during the session
+const translationCache: Record<string, TranslatedContent> = {};
+
 function QuestionDisplay({
   question,
   index,
@@ -648,73 +651,84 @@ function QuestionDisplay({
   const [translatedContent, setTranslatedContent] = useState<TranslatedContent | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
 
-  // Ref to track the language we are currently trying to display
-  // This helps us discard results from stale requests (race condition fix)
-  const currentLangRef = useRef<Language>(language);
-
   useEffect(() => {
-    currentLangRef.current = language;
-  }, [language]);
+    let active = true;
 
-  const translateContent = useCallback(async (lang: Language, qText: string, ans: Omit<Answer, 'ref'>[]) => {
-    const originalAnswers: { [id: string]: string } = {};
-    ans.forEach(a => originalAnswers[a.id] = a.text);
-    const originalContent = { questionText: qText, answers: originalAnswers };
+    const fetchTranslation = async () => {
+      if (!question.text || !answersData) return;
 
-    // If English, we don't need to call the API
-    if (lang === 'English') {
-      // Only update if this is still the requested language
-      if (currentLangRef.current === 'English') {
-        setTranslatedContent(originalContent);
-        setIsTranslating(false);
+      const cacheKey = `${question.id}-${language}`;
+
+      // 1. Handle English (Original)
+      if (language === 'English') {
+        const originalAnswers: { [id: string]: string } = {};
+        answersData.forEach(a => originalAnswers[a.id] = a.text);
+        const originalContent = { questionText: question.text, answers: originalAnswers };
+
+        if (active) {
+          setTranslatedContent(originalContent);
+          setIsTranslating(false);
+        }
+        return;
       }
-      return;
-    }
 
-    setIsTranslating(true);
-    try {
-      const answersToTranslate = ans.map(a => ({ id: a.id, text: a.text }));
-      const result = await translateText({
-        question: qText,
-        answers: answersToTranslate,
-        targetLanguage: lang,
-      });
+      // 2. Check Cache
+      if (translationCache[cacheKey]) {
+        if (active) {
+          setTranslatedContent(translationCache[cacheKey]);
+          setIsTranslating(false);
+        }
+        return;
+      }
 
-      // KEY FIX: Only update state if the language hasn't changed while we were waiting
-      if (currentLangRef.current === lang) {
+      // 3. Perform Translation
+      if (active) setIsTranslating(true);
+
+      try {
+        const answersToTranslate = answersData.map(a => ({ id: a.id, text: a.text }));
+
+        // Use the original English text for translation source
+        const result = await translateText({
+          question: question.text,
+          answers: answersToTranslate,
+          targetLanguage: language,
+        });
+
         const translatedAnswers: { [id: string]: string } = {};
         result.translatedAnswers.forEach(a => {
           translatedAnswers[a.id] = a.text;
         });
 
-        setTranslatedContent({
+        const newContent = {
           questionText: result.translatedQuestion,
           answers: translatedAnswers,
-        });
-      }
+        };
 
-    } catch (e) {
-      console.error("Translation failed", e);
-      // Fallback to English on failure, but only if language hasn't changed
-      if (currentLangRef.current === lang) {
-        setTranslatedContent(originalContent);
-      }
-    } finally {
-      // Only turn off loading if we are still on the same language (or if we finished the latest request)
-      // Actually, simplest is just to turn it off if we match.
-      if (currentLangRef.current === lang) {
-        setIsTranslating(false);
-      }
-    }
-  }, []);
+        // Save to cache
+        translationCache[cacheKey] = newContent;
 
-  useEffect(() => {
-    if (question.text && answersData) {
-      // If we are already English, ensure we reset/set immediately without loading state if possible
-      // But the callback handles it.
-      translateContent(language, question.text, answersData);
-    }
-  }, [language, question.text, answersData, translateContent]);
+        if (active) {
+          setTranslatedContent(newContent);
+        }
+      } catch (e) {
+        console.error("Translation failed", e);
+        // Fallback to English on error
+        const originalAnswers: { [id: string]: string } = {};
+        answersData.forEach(a => originalAnswers[a.id] = a.text);
+        if (active) {
+          setTranslatedContent({ questionText: question.text, answers: originalAnswers });
+        }
+      } finally {
+        if (active) setIsTranslating(false);
+      }
+    };
+
+    fetchTranslation();
+
+    return () => {
+      active = false;
+    };
+  }, [language, question.text, answersData, question.id]);
 
 
   return (
@@ -725,11 +739,7 @@ function QuestionDisplay({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {areAnswersLoading || (isTranslating && !translatedContent && language !== 'English') ? (
-          // Show loader if we are loading answers OR if we are translating for the first time and don't have content
-          // But actually we usually have English content. 
-          // Better UX: Show English while loading? Or show Spinner?
-          // Existing code showed Spinner. Let's keep it.
+        {areAnswersLoading || (isTranslating && !translatedContent) ? (
           <div className="flex justify-center p-4">
             <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
           </div>
