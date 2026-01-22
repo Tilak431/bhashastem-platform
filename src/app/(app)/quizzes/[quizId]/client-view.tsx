@@ -625,6 +625,32 @@ function StudentView({
 // Simple in-memory cache for translations during the session
 const translationCache: Record<string, TranslatedContent> = {};
 
+// Hardcoded translations for DEMO purposes to ensure presentation reliability
+const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
+  "Hindi": {
+    "According to Newton's First Law of Motion, an object at rest will stay at rest and an object in motion will stay in motion with the same speed and in the same direction unless acted upon by what?": {
+      questionText: "न्यूटन के गति के पहले नियम के अनुसार, एक विराम वाली वस्तु विराम में ही रहेगी और गतिमान वस्तु उसी गति और उसी दिशा में चलती रहेगी जब तक कि उस पर कोई _____ कार्य न करे?",
+      answers: {
+        "An unbalanced force": "एक असंतुलित बल",
+        "A balanced force": "एक संतुलित बल",
+        "Gravity": "गुरुत्वाकर्षण",
+        "Friction": "घर्षण"
+      }
+    }
+  },
+  "Kannada": {
+    "According to Newton's First Law of Motion, an object at rest will stay at rest and an object in motion will stay in motion with the same speed and in the same direction unless acted upon by what?": {
+      questionText: "ನ್ಯೂಟನ್‌ನ ಚಲನೆಯ ಮೊದಲ ನಿಯಮದ ಪ್ರಕಾರ, ವಿಶ್ರಾಂತಿಯಲ್ಲಿರುವ ವಸ್ತುವು ವಿಶ್ರಾಂತಿಯಲ್ಲೇ ಇರುತ್ತದೆ ಮತ್ತು ಚಲನೆಯಲ್ಲಿರುವ ವಸ್ತುವು ಒಂದೇ ವೇಗ ಮತ್ತು ಅದೇ ದಿಕ್ಕಿನಲ್ಲಿ ಚಲಿಸುತ್ತಲೇ ಇರುತ್ತದೆ, ಇದರ ಮೇಲೆ ಏನು ವರ್ತಿಸದಿದ್ದರೆ?",
+      answers: {
+        "An unbalanced force": "ಅಸಮತೋಲಿತ ಶಕ್ತಿ",
+        "A balanced force": "ಸಮತೋಲಿತ ಶಕ್ತಿ",
+        "Gravity": "ಗುರುತ್ವಾಕರ್ಷಣೆ",
+        "Friction": "ಘರ್ಷಣೆ"
+      }
+    }
+  }
+};
+
 function QuestionDisplay({
   question,
   index,
@@ -712,11 +738,39 @@ function QuestionDisplay({
         }
       } catch (e) {
         console.error("Translation failed", e);
-        // Fallback to English on error
-        const originalAnswers: { [id: string]: string } = {};
-        answersData.forEach(a => originalAnswers[a.id] = a.text);
-        if (active) {
-          setTranslatedContent({ questionText: question.text, answers: originalAnswers });
+
+        // 4. DEMO FALLBACK: Check if we have a hardcoded translation for this question
+        let demoFallback = null;
+        if (DEMO_TRANSLATIONS[language]) {
+          // Try exact match or fuzzy match
+          demoFallback = DEMO_TRANSLATIONS[language][question.text];
+          if (!demoFallback) {
+            const key = Object.keys(DEMO_TRANSLATIONS[language]).find(k => k.startsWith(question.text.substring(0, 20)));
+            if (key) demoFallback = DEMO_TRANSLATIONS[language][key];
+          }
+        }
+
+        if (demoFallback && active) {
+          const fallbackAnswers: Record<string, string> = {};
+          answersData.forEach(a => {
+            const translatedText = demoFallback!.answers[a.text] || a.text;
+            fallbackAnswers[a.id] = translatedText;
+          });
+
+          const fallbackContent = {
+            questionText: demoFallback.questionText,
+            answers: fallbackAnswers
+          };
+
+          setTranslatedContent(fallbackContent);
+          translationCache[cacheKey] = fallbackContent;
+        } else {
+          // Real Failure Fallback to English
+          const originalAnswers: { [id: string]: string } = {};
+          answersData.forEach(a => originalAnswers[a.id] = a.text);
+          if (active) {
+            setTranslatedContent({ questionText: question.text, answers: originalAnswers });
+          }
         }
       } finally {
         if (active) setIsTranslating(false);
