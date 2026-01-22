@@ -672,6 +672,52 @@ const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
         "It becomes four times larger": "ಇದು ನಾಲ್ಕು ಪಟ್ಟು ದೊಡ್ಡದಾಗುತ್ತದೆ"
       }
     }
+  },
+  "Tamil": {
+    "According to Newton's First Law of Motion, an object at rest will stay at rest and an object in motion will stay in motion with the same speed and in the same direction unless acted upon by what?": {
+      questionText: "நியூட்டனின் முதல் இயக்க விதியின்படி, ஓய்வில் இருக்கும் ஒரு பொருள் ஓய்விலேயே இருக்கும், மேலும் இயக்கத்தில் உள்ள ஒரு பொருள் அதே வேகத்திலும் அதே திசையிலும் தொடர்ந்து இயங்கும், எது செயல்படாத வரை?",
+      answers: {
+        "An unbalanced force": "ஒரு சமநிலையற்ற விசை",
+        "A balanced force": "ஒரு சமநிலையான விசை",
+        "Gravity": "ஈர்ப்பு விசை",
+        "Friction": "உராய்வு"
+      }
+    },
+    "If the velocity of a moving object is doubled, what happens to its kinetic energy?": {
+      questionText: "ஒரு நகரும் பொருளின் திசைவேகம் இரண்டு மடங்காக அதிகரித்தால், அதன் இயக்க ஆற்றலுக்கு என்ன நிகழும்?",
+      answers: {
+        "It is halved": "அது பாதியாக குறையும்",
+        "It stays the same": "அது மாறாமல் இருக்கும்",
+        "It remains the same": "அது மாறாமல் இருக்கும்",
+        "It doubles": "அது இரண்டு மடங்காகும்",
+        "It is doubled": "அது இரண்டு மடங்காகும்",
+        "It quadruples": "அது நான்கு மடங்காகும்",
+        "It becomes four times larger": "அது நான்கு மடங்காகிறது"
+      }
+    }
+  },
+  "Bengali": {
+    "According to Newton's First Law of Motion, an object at rest will stay at rest and an object in motion will stay in motion with the same speed and in the same direction unless acted upon by what?": {
+      questionText: "নিউটনের গতির প্রথম সূত্র অনুসারে, স্থির অবস্থায় থাকা একটি বস্তু স্থির থাকবে এবং গতিশীল বস্তু একই গতিতে এবং একই দিকে চলতে থাকবে যতক্ষণ না তার উপর কী প্রয়োগ করা হয়?",
+      answers: {
+        "An unbalanced force": "একটি ভারসাম্যহীন বল",
+        "A balanced force": "একটি ভারসাম্যযুক্ত বল",
+        "Gravity": "মহাকর্ষ",
+        "Friction": "ঘর্ষণ"
+      }
+    },
+    "If the velocity of a moving object is doubled, what happens to its kinetic energy?": {
+      questionText: "যদি কোনো গতিশীল বস্তুর বেগ দ্বিগুণ করা হয়, তবে তার গতিশক্তির কী হবে?",
+      answers: {
+        "It is halved": "এটি অর্ধেক হয়ে যায়",
+        "It stays the same": "এটি একই থাকে",
+        "It remains the same": "এটি একই থাকে",
+        "It doubles": "এটি দ্বিগুণ হয়",
+        "It is doubled": "এটি দ্বিগুণ হয়",
+        "It quadruples": "এটি চারগুণ হয়",
+        "It becomes four times larger": "এটি চারগুণ বড় হয়ে যায়"
+      }
+    }
   }
 };
 
