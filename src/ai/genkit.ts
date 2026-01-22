@@ -11,5 +11,5 @@ export const ai = genkit({
       credentials: getGoogleCredentials()
     }
   })],
-  model: 'vertexai/gemini-1.5-flash',
+  model: 'vertexai/gemini-2.0-flash-exp',
 });

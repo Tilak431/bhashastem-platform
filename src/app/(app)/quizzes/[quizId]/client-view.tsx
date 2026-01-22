@@ -636,6 +636,15 @@ const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
         "Gravity": "गुरुत्वाकर्षण",
         "Friction": "घर्षण"
       }
+    },
+    "If the velocity of a moving object is doubled, what happens to its kinetic energy?": {
+      questionText: "यदि किसी गतिमान वस्तु का वेग दोगुना कर दिया जाए, तो उसकी गतिज ऊर्जा का क्या होगा?",
+      answers: {
+        "It is halved": "यह आधी हो जाती है",
+        "It stays the same": "यह समान रहती है",
+        "It doubles": "यह दोगुनी हो जाती है",
+        "It quadruples": "यह चौगुनी हो जाती है"
+      }
     }
   },
   "Kannada": {
@@ -647,9 +656,46 @@ const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
         "Gravity": "ಗುರುತ್ವಾಕರ್ಷಣೆ",
         "Friction": "ಘರ್ಷಣೆ"
       }
+    },
+    "If the velocity of a moving object is doubled, what happens to its kinetic energy?": {
+      questionText: "ಚಲಿಸುವ ವಸ್ತುವಿನ ವೇಗವು ದ್ವಿಗುಣಗೊಂಡರೆ, ಅದರ ಚಲನ ಶಕ್ತಿಗೆ ಏನಾಗುತ್ತದೆ?",
+      answers: {
+        "It is halved": "ಇದು ಅರ್ಧದಷ್ಟಾಗುತ್ತದೆ",
+        "It stays the same": "ಇದು ಒಂದೇ ಆಗಿರುತ್ತದೆ",
+        "It doubles": "ಇದು ದ್ವಿಗುಣಗೊಳ್ಳುತ್ತದೆ",
+        "It quadruples": "ಇದು ನಾಲ್ಕು ಪಟ್ಟು ಹೆಚ್ಚಾಗುತ್ತದೆ"
+      }
     }
   }
 };
+
+// Global Translation Queue to prevent rate limits
+const translationQueue: (() => Promise<void>)[] = [];
+let isProcessingQueue = false;
+
+const processQueue = async () => {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+  while (translationQueue.length > 0) {
+    const task = translationQueue.shift();
+    if (task) {
+      try {
+        await task();
+      } catch (e) {
+        console.error("Queue task failed", e);
+      }
+      // Small delay to prevent hitting rate limits even with sequential calls
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+  isProcessingQueue = false;
+};
+
+const scheduleTranslation = (task: () => Promise<void>) => {
+  translationQueue.push(task);
+  processQueue();
+};
+
 
 function QuestionDisplay({
   question,
@@ -710,71 +756,78 @@ function QuestionDisplay({
       // 3. Perform Translation
       if (active) setIsTranslating(true);
 
-      try {
-        const answersToTranslate = answersData.map(a => ({ id: a.id, text: a.text }));
+      const runTranslation = async () => {
+        if (!active) return;
+        try {
+          const answersToTranslate = answersData.map(a => ({ id: a.id, text: a.text }));
 
-        // Use the original English text for translation source
-        const result = await translateText({
-          question: question.text,
-          answers: answersToTranslate,
-          targetLanguage: language,
-        });
-
-        const translatedAnswers: { [id: string]: string } = {};
-        result.translatedAnswers.forEach(a => {
-          translatedAnswers[a.id] = a.text;
-        });
-
-        const newContent = {
-          questionText: result.translatedQuestion,
-          answers: translatedAnswers,
-        };
-
-        // Save to cache
-        translationCache[cacheKey] = newContent;
-
-        if (active) {
-          setTranslatedContent(newContent);
-        }
-      } catch (e) {
-        console.error("Translation failed", e);
-
-        // 4. DEMO FALLBACK: Check if we have a hardcoded translation for this question
-        let demoFallback = null;
-        if (DEMO_TRANSLATIONS[language]) {
-          // Try exact match or fuzzy match
-          demoFallback = DEMO_TRANSLATIONS[language][question.text];
-          if (!demoFallback) {
-            const key = Object.keys(DEMO_TRANSLATIONS[language]).find(k => k.startsWith(question.text.substring(0, 20)));
-            if (key) demoFallback = DEMO_TRANSLATIONS[language][key];
-          }
-        }
-
-        if (demoFallback && active) {
-          const fallbackAnswers: Record<string, string> = {};
-          answersData.forEach(a => {
-            const translatedText = demoFallback!.answers[a.text] || a.text;
-            fallbackAnswers[a.id] = translatedText;
+          // Use the original English text for translation source
+          const result = await translateText({
+            question: question.text,
+            answers: answersToTranslate,
+            targetLanguage: language,
           });
 
-          const fallbackContent = {
-            questionText: demoFallback.questionText,
-            answers: fallbackAnswers
+          const translatedAnswers: { [id: string]: string } = {};
+          result.translatedAnswers.forEach(a => {
+            translatedAnswers[a.id] = a.text;
+          });
+
+          const newContent = {
+            questionText: result.translatedQuestion,
+            answers: translatedAnswers,
           };
 
-          setTranslatedContent(fallbackContent);
-          translationCache[cacheKey] = fallbackContent;
-        } else {
-          // Real Failure Fallback to English
-          const originalAnswers: { [id: string]: string } = {};
-          answersData.forEach(a => originalAnswers[a.id] = a.text);
+          // Save to cache
+          translationCache[cacheKey] = newContent;
+
           if (active) {
-            setTranslatedContent({ questionText: question.text, answers: originalAnswers });
+            setTranslatedContent(newContent);
+            setIsTranslating(false);
+          }
+        } catch (e) {
+          console.error("Translation failed", e);
+
+          // 4. DEMO FALLBACK: Check if we have a hardcoded translation for this question
+          let demoFallback = null;
+          if (DEMO_TRANSLATIONS[language]) {
+            // Try exact match or fuzzy match
+            demoFallback = DEMO_TRANSLATIONS[language][question.text];
+            if (!demoFallback) {
+              const key = Object.keys(DEMO_TRANSLATIONS[language]).find(k => k.startsWith(question.text.substring(0, 15)));
+              if (key) demoFallback = DEMO_TRANSLATIONS[language][key];
+            }
+          }
+
+          if (demoFallback && active) {
+            const fallbackAnswers: Record<string, string> = {};
+            answersData.forEach(a => {
+              const translatedText = demoFallback!.answers[a.text] || a.text;
+              fallbackAnswers[a.id] = translatedText;
+            });
+
+            const fallbackContent = {
+              questionText: demoFallback.questionText,
+              answers: fallbackAnswers
+            };
+
+            setTranslatedContent(fallbackContent);
+            translationCache[cacheKey] = fallbackContent;
+            setIsTranslating(false);
+          } else {
+            // Real Failure Fallback to English
+            const originalAnswers: { [id: string]: string } = {};
+            answersData.forEach(a => originalAnswers[a.id] = a.text);
+            if (active) {
+              setTranslatedContent({ questionText: question.text, answers: originalAnswers });
+              setIsTranslating(false);
+            }
           }
         }
-      } finally {
-        if (active) setIsTranslating(false);
-      }
+      };
+
+      // Push to queue
+      scheduleTranslation(runTranslation);
     };
 
     fetchTranslation();
