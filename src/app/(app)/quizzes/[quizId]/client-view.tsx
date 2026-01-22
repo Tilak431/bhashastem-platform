@@ -722,7 +722,9 @@ const DEMO_TRANSLATIONS: Record<string, Record<string, TranslatedContent>> = {
 };
 
 // Global Translation Queue to prevent rate limits
-const translationQueue: (() => Promise<void>)[] = [];
+// Global Translation Queue to prevent rate limits
+// Tasks return true if they performed an API call (needing delay), false otherwise
+const translationQueue: (() => Promise<boolean>)[] = [];
 let isProcessingQueue = false;
 
 const processQueue = async () => {
@@ -731,19 +733,27 @@ const processQueue = async () => {
   while (translationQueue.length > 0) {
     const task = translationQueue.shift();
     if (task) {
+      let performedApiCall = false;
       try {
-        await task();
+        performedApiCall = await task();
       } catch (e) {
         console.error("Queue task failed", e);
       }
-      // Increased delay to 1500ms to be extremely safe with rate limits on desktop
-      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Only wait if we actually hit the API
+      if (performedApiCall) {
+        // Increased delay to 1500ms to be extremely safe with rate limits on desktop
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } else {
+        // Small delay just to yield event loop
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
   }
   isProcessingQueue = false;
 };
 
-const scheduleTranslation = (task: () => Promise<void>) => {
+const scheduleTranslation = (task: () => Promise<boolean>) => {
   translationQueue.push(task);
   processQueue();
 };
@@ -808,8 +818,8 @@ function QuestionDisplay({
       // 3. Perform Translation
       if (active) setIsTranslating(true);
 
-      const runTranslation = async () => {
-        if (!active) return;
+      const runTranslation = async (): Promise<boolean> => {
+        if (!active) return false;
         try {
           const answersToTranslate = answersData.map(a => ({ id: a.id, text: a.text }));
 
@@ -876,6 +886,7 @@ function QuestionDisplay({
             }
           }
         }
+        return true;
       };
 
       // Push to queue
