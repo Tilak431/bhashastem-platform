@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useFirestore,
@@ -648,13 +648,26 @@ function QuestionDisplay({
   const [translatedContent, setTranslatedContent] = useState<TranslatedContent | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
 
+  // Ref to track the language we are currently trying to display
+  // This helps us discard results from stale requests (race condition fix)
+  const currentLangRef = useRef<Language>(language);
+
+  useEffect(() => {
+    currentLangRef.current = language;
+  }, [language]);
+
   const translateContent = useCallback(async (lang: Language, qText: string, ans: Omit<Answer, 'ref'>[]) => {
     const originalAnswers: { [id: string]: string } = {};
     ans.forEach(a => originalAnswers[a.id] = a.text);
     const originalContent = { questionText: qText, answers: originalAnswers };
 
+    // If English, we don't need to call the API
     if (lang === 'English') {
-      setTranslatedContent(originalContent);
+      // Only update if this is still the requested language
+      if (currentLangRef.current === 'English') {
+        setTranslatedContent(originalContent);
+        setIsTranslating(false);
+      }
       return;
     }
 
@@ -667,27 +680,38 @@ function QuestionDisplay({
         targetLanguage: lang,
       });
 
-      const translatedAnswers: { [id: string]: string } = {};
-      result.translatedAnswers.forEach(a => {
-        translatedAnswers[a.id] = a.text;
-      });
+      // KEY FIX: Only update state if the language hasn't changed while we were waiting
+      if (currentLangRef.current === lang) {
+        const translatedAnswers: { [id: string]: string } = {};
+        result.translatedAnswers.forEach(a => {
+          translatedAnswers[a.id] = a.text;
+        });
 
-      setTranslatedContent({
-        questionText: result.translatedQuestion,
-        answers: translatedAnswers,
-      });
+        setTranslatedContent({
+          questionText: result.translatedQuestion,
+          answers: translatedAnswers,
+        });
+      }
 
     } catch (e) {
       console.error("Translation failed", e);
-      // Fallback to English on failure
-      setTranslatedContent(originalContent);
+      // Fallback to English on failure, but only if language hasn't changed
+      if (currentLangRef.current === lang) {
+        setTranslatedContent(originalContent);
+      }
     } finally {
-      setIsTranslating(false);
+      // Only turn off loading if we are still on the same language (or if we finished the latest request)
+      // Actually, simplest is just to turn it off if we match.
+      if (currentLangRef.current === lang) {
+        setIsTranslating(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (question.text && answersData) {
+      // If we are already English, ensure we reset/set immediately without loading state if possible
+      // But the callback handles it.
       translateContent(language, question.text, answersData);
     }
   }, [language, question.text, answersData, translateContent]);
@@ -697,12 +721,18 @@ function QuestionDisplay({
     <Card>
       <CardHeader>
         <CardTitle>
-          Question {index + 1}: {isTranslating ? <Loader2 className="inline-block animate-spin" /> : translatedContent?.questionText || question.text}
+          Question {index + 1}: {isTranslating ? <Loader2 className="inline-block animate-spin h-5 w-5 ml-2" /> : (translatedContent?.questionText || question.text)}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {areAnswersLoading || isTranslating ? (
-          <Loader2 className="animate-spin" />
+        {areAnswersLoading || (isTranslating && !translatedContent && language !== 'English') ? (
+          // Show loader if we are loading answers OR if we are translating for the first time and don't have content
+          // But actually we usually have English content. 
+          // Better UX: Show English while loading? Or show Spinner?
+          // Existing code showed Spinner. Let's keep it.
+          <div className="flex justify-center p-4">
+            <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+          </div>
         ) : (
           <RadioGroup
             value={selectedAnswer}
